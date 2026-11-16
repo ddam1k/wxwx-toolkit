@@ -21,7 +21,7 @@ from ..core.addons import CatalogEntry, Manifest
 from ..core.i18n import t
 from ..core.paths import data_dir
 from .host import Host
-from .pages import CardModel, ErrorPage, SettingsPage, StorePage
+from .pages import AddonSettingsPage, CardModel, ErrorPage, SettingsHub, SettingsPage, StorePage
 from .shell import NavButton, Sidebar
 from .theme import stylesheet, theme
 from .titlebar import HEIGHT as HEADER_H, HeaderBar
@@ -86,6 +86,15 @@ class MainWindow(FramelessMainWindow):
         self._update_busy = False
         self._smoke: str | None = None
         self.smoke_errors: list[str] = []
+        self.catalog_checked: str | None = None
+        self._catalog_manual = False
+        self.pending_updates: set[str] = set()
+        self._pending_timer = QTimer(self)
+        self._pending_timer.setInterval(15_000)
+        self._pending_timer.timeout.connect(self._retry_pending)
+        self._recheck = QTimer(self)
+        self._recheck.setInterval(30 * 60_000)          # look for add-on updates every 30 min
+        self._recheck.timeout.connect(lambda: self.load_catalog())
 
         self._build()
         self.setAcceptDrops(True)
@@ -102,6 +111,7 @@ class MainWindow(FramelessMainWindow):
         self.retranslate()
         self.go("store")
         self.load_catalog()
+        self._recheck.start()
         self.pool.submit(self._read_component_versions)
         if self.option("au_ask"):
             QTimer.singleShot(2500, lambda: self.check_updates(manual=False))
@@ -186,15 +196,16 @@ class MainWindow(FramelessMainWindow):
         sp.open_clicked.connect(self.go)
         sp.component_clicked.connect(self.install_component)
         sp.install_file_clicked.connect(self.install_from_file)
-        sp.retry_clicked.connect(self.load_catalog)
+        sp.retry_clicked.connect(lambda: self.load_catalog(manual=True))
         self.settings_page = SettingsPage(self)
         self.settings_page.lang_chosen.connect(self.set_lang)
         self.settings_page.option_changed.connect(self.set_option)
         self.settings_page.folder_change.connect(self.change_folder)
+        self.settings_hub = SettingsHub(self.settings_page)
         self.pages["store"] = self.store_page
-        self.pages["settings"] = self.settings_page
+        self.pages["settings"] = self.settings_hub
         self.stack.addWidget(self.store_page)
-        self.stack.addWidget(self.settings_page)
+        self.stack.addWidget(self.settings_hub)
 
         self.toast = Toast(central)
         self.titleBar.raise_()
@@ -318,14 +329,18 @@ class MainWindow(FramelessMainWindow):
 
     # ======================================================== add-on pages
     def _load_addon(self, m: Manifest):
+        was_current = self.current == m.id
         self._unload_addon(m.id)
-        host = Host(m.id, self.toast.show_text, self.folder, self)
+        host = Host(m.id, self.toast.show_text, self.folder, self,
+                    installed_fn=lambda a: a in self.installed, open_settings_fn=self.open_addon_settings)
         title = m.title(i18n.lang())
+        settings_widget = None
         if not m.compatible:
             widget = ErrorPage(title, t("needs_toolkit", v=m.min_toolkit))
         else:
             try:
                 widget = addons.load(m, host)
+                settings_widget = addons.load_settings(m, host)
             except Exception:
                 widget = ErrorPage(title, traceback.format_exc())
                 if self._smoke:
@@ -333,19 +348,63 @@ class MainWindow(FramelessMainWindow):
         self.hosts[m.id] = host
         self.pages[m.id] = widget
         self.stack.addWidget(widget)
+        if settings_widget is not None:
+            page = AddonSettingsPage(m.icon, settings_widget)
+            page.set_texts(title, t("addon_v", v=m.version))
+            self.settings_hub.set_addon(m.id, m.icon, page)
+            self._retitle_settings()
         self._rebuild_tool_nav()
+        if was_current:                       # hot update while the page was open: show the new one
+            self.go(m.id)
 
     def _unload_addon(self, aid: str):
         w = self.pages.pop(aid, None)
         if w is not None:
+            if hasattr(w, "shutdown"):
+                try:
+                    w.shutdown()
+                except Exception:
+                    traceback.print_exc()
             self.stack.removeWidget(w)
             w.deleteLater()
+        if aid in self.settings_hub.pages:
+            self.settings_hub.set_addon(aid, "", None)
         h = self.hosts.pop(aid, None)
         if h is not None:
             h.deleteLater()
 
+    def addon_busy(self, aid: str) -> bool:
+        w = self.pages.get(aid)
+        try:
+            return bool(w is not None and hasattr(w, "is_busy") and w.is_busy())
+        except Exception:
+            return False
+
+    def _retry_pending(self):
+        for aid in list(self.pending_updates):
+            if not self.addon_busy(aid):
+                self.pending_updates.discard(aid)
+                self.install_addon(aid, quiet=True)
+        if not self.pending_updates:
+            self._pending_timer.stop()
+
+    def open_addon_settings(self, aid: str):
+        self.go("settings")
+        self.settings_hub.open(aid)
+
+    def _retitle_settings(self):
+        titles = {"general": t("s_general")}
+        titles.update({aid: m.title(i18n.lang()) for aid, m in self.installed.items()})
+        self.settings_hub.set_titles(titles)
+        for aid, page in self.settings_hub.pages.items():
+            if isinstance(page, AddonSettingsPage) and aid in self.installed:
+                page.set_texts(self.installed[aid].title(i18n.lang()), t("addon_v", v=self.installed[aid].version))
+
     # ======================================================== catalog
-    def load_catalog(self):
+    def load_catalog(self, manual: bool = False):
+        if self.catalog_state == "loading" and self.catalog:
+            return
+        self._catalog_manual = manual
         self.catalog_state = "loading"
         self.store_page.refresh()
 
@@ -357,8 +416,14 @@ class MainWindow(FramelessMainWindow):
         self.pool.submit(task)
 
     def _on_catalog(self, entries):
+        from datetime import datetime
         self.catalog = entries
         self.catalog_state = "ok"
+        self.catalog_checked = datetime.now().strftime("%H:%M")
+        if self._catalog_manual:
+            n = sum(1 for e in entries if addons.needs_update(e, self.installed.get(e.id)))
+            self.toast.show_text(t("found_upd", n=n) if n else t("all_fresh"))
+            self._catalog_manual = False
         self.store_page.refresh()
         self._update_badges()
         for e in entries:
@@ -372,6 +437,9 @@ class MainWindow(FramelessMainWindow):
 
     def _on_catalog_failed(self, err: str):
         self.catalog_state = "error"
+        if self._catalog_manual:
+            self.toast.show_text(t("catalog_error"), 4000)
+            self._catalog_manual = False
         self.store_page.status.setToolTip(err)
         self.store_page.refresh()
 
@@ -383,6 +451,16 @@ class MainWindow(FramelessMainWindow):
         e = self._entry(aid)
         if not e or aid in self.busy_addons:
             return
+        if self.addon_busy(aid):
+            title = self.installed[aid].title(i18n.lang()) if aid in self.installed else aid
+            if quiet:                          # never kill a running job for a silent update
+                if aid not in self.pending_updates:
+                    self.pending_updates.add(aid)
+                    self._pending_timer.start()
+                    self.toast.show_text(t("upd_postponed", n=title), 4000)
+                return
+            if QMessageBox.question(self, APP_NAME, t("busy_update", n=title)) != QMessageBox.StandardButton.Yes:
+                return
         missing = [n for n in e.needs if n in components.COMPONENTS and not components.COMPONENTS[n].available]
         self.busy_addons[aid] = (0.0, "…")
         self.store_page.refresh()
@@ -508,6 +586,10 @@ class MainWindow(FramelessMainWindow):
         self.nav_empty.setText(t("nav_empty"))
         self.nav["store"].setText(t("addons"))
         self.nav["settings"].setText(t("settings"))
+        self.settings_hub.h1.setText(t("settings"))
+        self.settings_hub.sub.setText(t("settings_sub"))
+        self.settings_hub.sep.setText(t("s_addons"))
+        self._retitle_settings()
         self.ver_btn.setToolTip(t("check_upd"))
         self._rebuild_tool_nav()
         self.store_page.refresh()
@@ -614,11 +696,14 @@ class MainWindow(FramelessMainWindow):
         QTimer.singleShot(400, QApplication.quit)
 
     # ======================================================== smoke test (CI)
-    def smoke(self, shot: str, addon_zip: str | None):
+    def smoke(self, shot: str, addon_zips: list[str] | None = None, media: str | None = None):
+        """Clicks through the UI and saves screenshots: <shot>, <shot>_addon_<id>, …  Exit code 1 on errors."""
         self._smoke = shot
+        addon_zips = list(addon_zips or [])
         root, ext = os.path.splitext(shot)
-        QTimer.singleShot(120_000, lambda: QApplication.exit(3))
+        QTimer.singleShot(180_000, lambda: QApplication.exit(3))
         steps = []
+        loaded: list[str] = []
 
         def snap(suffix):
             return lambda: self.grab().save(root + suffix + ext)
@@ -629,33 +714,79 @@ class MainWindow(FramelessMainWindow):
             else:
                 run()
 
-        steps.append(snap(""))
-        if addon_zip:
-            def add():
-                m = self.install_zip(addon_zip)
-                if not m:
-                    self.smoke_errors.append("install_zip failed")
-                    return
-                self.go(m.id)
+        frames: list = []
+        if media:
+            def media_start():
+                from PySide6.QtMultimedia import QMediaPlayer, QVideoSink
+                self._mp, self._sink = QMediaPlayer(self), QVideoSink(self)
+                self._mp.setVideoSink(self._sink)
+                self._sink.videoFrameChanged.connect(lambda f: frames.append((f.width(), f.height())))
+                self._mp.errorOccurred.connect(lambda _e, msg: self.smoke_errors.append(f"media: {msg}"))
+                self._mp.setSource(QUrl.fromLocalFile(media))
+                self._mp.play()
+            steps.append(media_start)
 
+        steps.append(snap(""))
+        for z in addon_zips:
+            def add(z=z):
+                m = self.install_zip(z)
+                if not m:
+                    self.smoke_errors.append(f"install_zip failed: {z}")
+                    return
+                loaded.append(m.id)
+                self.go(m.id)
+                if isinstance(self.pages.get(m.id), ErrorPage):
+                    self.smoke_errors.append(f"{m.id} shows the error page")
+            steps += [add, lambda: snap(f"_addon_{loaded[-1]}")() if loaded else None]
+        if addon_zips:
             def wtp():
                 import tempfile
-                aid = next(reversed(self.installed)) if self.installed else "hello"
+                aid = loaded[-1]
                 f = Path(tempfile.gettempdir()) / "smoke-preset.wtp"
                 presets.write(f, presets.make(aid, "Smoke preset", {"x": 1}, aid, "1.0.0", "ci"))
                 if not self.open_wtp(str(f)):
                     self.smoke_errors.append("open_wtp failed")
-            steps += [add, wtp, snap("_addon")]
-        steps += [lambda: self.go("settings"), lambda: self.set_lang("en"), snap("_settings_en"),
-                  lambda: self.go("store"), self.on_theme, snap("_light")]
-        if addon_zip:
-            steps += [lambda: self.go(next(reversed(self.installed))), snap("_addon_en_light")]
+
+            def hot_update():                     # reinstall the first add-on while its page is open
+                aid = loaded[0]
+                self.go(aid)
+                before = self.pages.get(aid)
+                m = self.install_zip(addon_zips[0])
+                after = self.pages.get(aid)
+                if not m or after is None or after is before or isinstance(after, ErrorPage) or self.current != aid:
+                    self.smoke_errors.append("hot update did not reload the add-on page")
+                else:
+                    print("hot update OK:", aid)
+            steps += [wtp, snap("_wtp"), hot_update, snap("_hot_update")]
+        steps += [lambda: self.go("settings"), lambda: self.set_lang("en"), snap("_settings_en")]
+        for z in addon_zips:
+            def tab(i=addon_zips.index(z)):
+                aid = loaded[i] if i < len(loaded) else None
+                if aid and aid in self.settings_hub.pages:
+                    self.open_addon_settings(aid)
+            steps += [tab, (lambda i=addon_zips.index(z): snap(f"_settings_{loaded[i]}")()
+                            if i < len(loaded) and loaded[i] in self.settings_hub.pages else None)]
+        steps += [lambda: self.go("store"), lambda: self.load_catalog(manual=True), self.on_theme, snap("_light")]
+        if addon_zips:
+            steps += [lambda: self.go(loaded[0]), snap("_addon_en_light")]
+        if media:
+            def media_verify():
+                print("media frames:", len(frames), frames[:1])
+                if not frames:
+                    self.smoke_errors.append("QtMultimedia: no video frame decoded")
+                self._mp.stop()
+            steps.append(media_verify)
 
         def run():
             if not steps:
+                for e in self.smoke_errors:
+                    print("SMOKE ERROR:", e)
                 QApplication.exit(1 if self.smoke_errors else 0)
                 return
-            steps.pop(0)()
+            try:
+                steps.pop(0)()
+            except Exception:
+                self.smoke_errors.append(traceback.format_exc())
             QTimer.singleShot(1300, run)
 
         QTimer.singleShot(1200, wait_catalog)

@@ -1,3 +1,16 @@
 {
-  "addons": []
+  "addons": [
+    {
+      "id": "compress",
+      "repo": "ddam1k/wxwx-toolkit",
+      "name": {"ru": "Видео", "en": "Video"},
+      "description": {
+        "ru": "MP4, WebM, GIF · CPU или NVENC · пресеты, которыми можно делиться",
+        "en": "MP4, WebM, GIF · CPU or NVENC · shareable presets"
+      },
+      "icon": "video",
+      "needs": ["ffmpeg"],
+      "min_toolkit": "1.1.0"
+    }
+  ]
 }

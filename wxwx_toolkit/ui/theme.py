@@ -80,6 +80,7 @@ QWidget { color: $text; }
 #sub { color: $muted; font-size: 9.6pt; }
 #section { color: $muted; font-size: 7.6pt; font-weight: 700; }
 #sideSection { color: $faint; font-size: 7.6pt; font-weight: 700; }
+#tabSep { color: $faint; font-size: 7.2pt; font-weight: 700; padding: 0 6px 4px 14px; border-left: 1px solid $line2; margin: 10px 2px 12px 8px; }
 #faint { color: $faint; font-size: 8.5pt; }
 #empty { color: $faint; font-size: 10pt; }
 

@@ -1,10 +1,17 @@
 {
   "id": "hello",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "entry": "wx_hello:create",
-  "name": {"ru": "Привет", "en": "Hello"},
-  "description": {"ru": "Пример аддона: показывает, что умеет host API", "en": "Example add-on: shows what the host API can do"},
+  "name": {
+    "ru": "Привет",
+    "en": "Hello"
+  },
+  "description": {
+    "ru": "Пример аддона: показывает, что умеет host API",
+    "en": "Example add-on: shows what the host API can do"
+  },
   "icon": "addon",
   "needs": [],
-  "min_toolkit": "1.0.0"
+  "min_toolkit": "1.0.0",
+  "settings": "wx_hello:settings"
 }

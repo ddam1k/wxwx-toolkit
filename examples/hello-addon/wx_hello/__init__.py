@@ -30,7 +30,7 @@ def create(host):
         info.setText(i.format(lang=host.lang, theme=host.theme, ff=host.component("ffmpeg") or "—"))
         btn.setText(b)
 
-    btn.clicked.connect(lambda: host.toast(TEXT.get(host.lang, TEXT["en"])[0]))
+    btn.clicked.connect(lambda: host.toast(TEXT.get(host.lang, TEXT["en"])[0] + " " + str(host.get("greeting", "✨"))))
 
     preset = QLabel()
     preset.setObjectName("sub")
@@ -39,5 +39,36 @@ def create(host):
         host.preset_received.connect(lambda d: preset.setText(f"✓ preset: {d['name']} · {d['settings']}"))
     host.lang_changed.connect(retranslate)
     host.theme_changed.connect(retranslate)
+    retranslate()
+    return w
+
+
+SETTINGS_TEXT = {
+    "ru": ("Приветствие в уведомлении", "Сохраняется через host.set() — страница аддона видит изменение сразу"),
+    "en": ("Greeting in the toast", "Saved with host.set() — the add-on page sees the change right away"),
+}
+
+
+def settings(host):
+    """toolkit 1.2+: manifest "settings" -> this widget becomes the add-on's tab in Settings."""
+    from PySide6.QtWidgets import QLineEdit
+    w = QWidget()
+    lay = QVBoxLayout(w)
+    lay.setContentsMargins(0, 18, 0, 0)
+    title, sub = QLabel(), QLabel()
+    title.setObjectName("rowTitle")
+    sub.setObjectName("rowSub")
+    edit = QLineEdit(host.get("greeting", "✨"))
+    edit.textChanged.connect(lambda v: host.set("greeting", v))
+    lay.addWidget(title)
+    lay.addWidget(sub)
+    lay.addSpacing(8)
+    lay.addWidget(edit)
+
+    def retranslate(*_):
+        a, b = SETTINGS_TEXT.get(host.lang, SETTINGS_TEXT["en"])
+        title.setText(a)
+        sub.setText(b)
+    host.lang_changed.connect(retranslate)
     retranslate()
     return w

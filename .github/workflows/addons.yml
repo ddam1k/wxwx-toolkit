@@ -1,0 +1,107 @@
+name: publish add-ons
+
+# Builds addons/<id>/ into wxwx-addon-<id>-<version>.zip, checks each one inside the real toolkit and
+# attaches it to the CURRENT toolkit release. Toolkits everywhere then offer the update — no new toolkit version.
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Only these add-on ids, space separated (empty = all)"
+        default: ""
+      force:
+        description: "Re-upload even if this version is already published"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Build and test only, publish nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  addons:
+    runs-on: windows-latest
+    env:
+      WXWX_TOOLKIT_DATA: ${{ github.workspace }}\ci-data
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Toolkit unit tests (the build script and the zips it makes)
+        run: python -m unittest discover -s tests -v
+
+      - name: ffmpeg for the add-ons
+        run: python -c "from wxwx_toolkit.core import components as c; print(c.install('ffmpeg'))"
+
+      - name: Add-on tests
+        shell: pwsh
+        run: |
+          $ff = python -c "import os; from wxwx_toolkit.core import components as c; print(os.path.dirname(c.COMPONENTS['ffmpeg'].exe()))"
+          $env:PATH = "$ff;$env:PATH"
+          foreach ($d in Get-ChildItem addons -Directory) {
+            if ("${{ inputs.only }}".Trim() -and -not ("${{ inputs.only }}" -split ' ' -contains $d.Name)) { continue }
+            if (Test-Path "$($d.FullName)\tests") {
+              Push-Location $d.FullName
+              python -m unittest discover -s tests -v
+              if ($LASTEXITCODE) { throw "tests failed: $($d.Name)" }
+              Pop-Location
+            }
+          }
+
+      - name: Build zips
+        shell: pwsh
+        run: |
+          $ids = "${{ inputs.only }}".Trim() -split '\s+' | Where-Object { $_ }
+          python scripts/build_addons.py @ids | Tee-Object built.txt
+          if ($LASTEXITCODE) { throw "build failed" }
+          if (-not (Get-Content built.txt)) { throw "nothing built — check the 'only' input" }
+
+      - name: Smoke test inside the toolkit
+        shell: pwsh
+        run: |
+          $a = @('run.py', '--smoke', 'smoke.png')
+          foreach ($z in Get-ChildItem dist/addons/*.zip) { $a += @('--addon', $z.FullName) }
+          python @a
+          if ($LASTEXITCODE -ne 0) { throw "smoke test exit code $LASTEXITCODE" }
+
+      - name: Print screenshots as base64
+        run: >
+          python -c "import base64,glob,textwrap;
+          [print('==SHOT '+f+'\n'+'\n'.join(textwrap.wrap(base64.b64encode(open(f,'rb').read()).decode(),3000))+'\n==END') for f in sorted(glob.glob('smoke*.png'))]"
+
+      - name: Publish to the current toolkit release
+        if: ${{ !inputs.dry_run }}
+        shell: pwsh
+        run: |
+          $repo = "${{ github.repository }}"
+          $tag = gh release view -R $repo --json tagName -q .tagName
+          if (-not $tag) { throw "no toolkit release yet" }
+          $assets = @(gh release view $tag -R $repo --json assets -q '.assets[].name')
+          "release $tag"
+          foreach ($line in Get-Content built.txt) {
+            $id, $ver, $path = $line -split ' ', 3
+            $name = "wxwx-addon-$id-$ver.zip"
+            $old = @($assets | Where-Object { $_ -match "^wxwx-addon-$([regex]::Escape($id))-(\d+\.\d+\.\d+)\.zip$" })
+            foreach ($o in $old) {
+              $ov = [version]($o -replace "^wxwx-addon-$([regex]::Escape($id))-", '' -replace '\.zip$', '')
+              if ($ov -gt [version]$ver) { throw "$id $ver is older than the published $ov" }
+            }
+            if ($assets -contains $name -and "${{ inputs.force }}" -ne "true") {
+              "::warning::$id $ver is already published — bump version in addons/$id/manifest.json (or run with force)"
+              continue
+            }
+            gh release upload $tag $path -R $repo --clobber
+            if ($LASTEXITCODE) { throw "upload failed: $name" }
+            foreach ($o in $old) { if ($o -ne $name) { gh release delete-asset $tag $o -R $repo -y } }
+            "published $name"
+          }

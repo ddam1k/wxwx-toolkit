@@ -71,10 +71,41 @@ jobs:
         run: python -m unittest discover -s tests -v
 
       - name: Shared components download (ffmpeg, yt-dlp)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: >
           python -c "from wxwx_toolkit.core import components as c;
           [print(k, c.install(k), c.COMPONENTS[k].version()) for k in ('yt-dlp', 'ffmpeg')];
           assert all(x.installed_locally for x in c.COMPONENTS.values())"
+
+      - name: Add-on tests (addons/*/tests, real ffmpeg)
+        shell: pwsh
+        run: |
+          $ff = python -c "import os; from wxwx_toolkit.core import components as c; print(os.path.dirname(c.COMPONENTS['ffmpeg'].exe()))"
+          $env:PATH = "$ff;$env:PATH"
+          foreach ($d in Get-ChildItem addons -Directory) {
+            if (Test-Path "$($d.FullName)\tests") {
+              Push-Location $d.FullName
+              python -m unittest discover -s tests -v
+              if ($LASTEXITCODE) { throw "tests failed: $($d.Name)" }
+              Pop-Location
+            }
+          }
+
+      - name: Build add-on zips (addons/*)
+        shell: pwsh
+        run: |
+          python scripts/build_addons.py | Tee-Object built.txt
+          if ($LASTEXITCODE) { throw "build_addons failed" }
+          $zips = (Get-ChildItem dist/addons/*.zip | ForEach-Object { "--addon"; $_.FullName })
+          "ADDON_ARGS=$($zips -join ' ')" >> $env:GITHUB_ENV
+
+      - name: Test clip for the media check (QtMultimedia must decode it)
+        run: >
+          python -c "import subprocess; from wxwx_toolkit.core import components as c;
+          subprocess.run([c.COMPONENTS['ffmpeg'].exe(), '-hide_banner', '-loglevel', 'error', '-y',
+          '-f', 'lavfi', '-i', 'testsrc2=s=640x360:r=30:d=3', '-f', 'lavfi', '-i', 'sine=d=3',
+          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', 'ci-media.mp4'], check=True)"
 
       - name: Build example add-on
         run: >
@@ -82,14 +113,17 @@ jobs:
           z = zipfile.ZipFile('hello-addon.zip', 'w');
           [z.write(f, f.relative_to(src)) for f in src.rglob('*') if f.is_file() and '__pycache__' not in f.parts]; z.close()"
 
-      - name: Smoke test (real UI, catalog from GitHub, example add-on)
+      - name: Smoke test (real UI, catalog from GitHub, all add-ons, hot update, media)
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python run.py --smoke smoke.png --addon hello-addon.zip
+          $a = @('run.py', '--smoke', 'smoke.png', '--addon', 'hello-addon.zip') + ($env:ADDON_ARGS -split ' ') + @('--media', "$pwd\ci-media.mp4")
+          python @a
           if ($LASTEXITCODE -ne 0) { throw "smoke test exit code $LASTEXITCODE" }
 
       - name: Print screenshots as base64 (manual runs only)
-        if: github.event_name == 'workflow_dispatch' && !inputs.release
+        if: ${{ !inputs.release }}
         run: >
           python -c "import base64,glob,textwrap;
           [print('==SHOT '+f+'\n'+'\n'.join(textwrap.wrap(base64.b64encode(open(f,'rb').read()).decode(),3000))+'\n==END') for f in sorted(glob.glob('smoke*.png'))]"
@@ -100,8 +134,9 @@ jobs:
       - name: Check exe starts and loads an add-on
         shell: pwsh
         run: |
-          $p = Start-Process dist/wxwx-toolkit/wxwx-toolkit.exe -ArgumentList '--smoke', "$pwd\exe-smoke.png", '--addon', "$pwd\hello-addon.zip" -PassThru
-          if (-not $p.WaitForExit(120000)) { Stop-Process $p; throw "exe smoke timed out" }
+          $al = @('--smoke', "$pwd\exe-smoke.png", '--addon', "$pwd\hello-addon.zip") + ($env:ADDON_ARGS -split ' ') + @('--media', "$pwd\ci-media.mp4")
+          $p = Start-Process dist/wxwx-toolkit/wxwx-toolkit.exe -ArgumentList $al -PassThru
+          if (-not $p.WaitForExit(200000)) { Stop-Process $p; throw "exe smoke timed out" }
           if ($p.ExitCode -ne 0) { throw "exe smoke exit code $($p.ExitCode)" }
 
       - name: Build installer
@@ -148,6 +183,7 @@ jobs:
           path: |
             dist/wxwx-toolkit-setup-*.exe
             dist/wxwx-toolkit-*-portable.zip
+            dist/addons/*.zip
 
       - name: Release (tag v* or manual run with "release")
         if: startsWith(github.ref, 'refs/tags/v') || inputs.release
@@ -162,3 +198,4 @@ jobs:
             dist/wxwx-toolkit-setup-*.exe
             dist/wxwx-toolkit-setup.exe
             dist/wxwx-toolkit-*-portable.zip
+            dist/addons/*.zip

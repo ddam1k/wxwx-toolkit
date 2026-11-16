@@ -504,3 +504,110 @@ class LangCard(QAbstractButton):
         p.setPen(theme.c("faint"))
         p.setFont(font(8.2))
         p.drawText(QRectF(54, r.top() + 28, r.width() - 60, 16), Qt.AlignmentFlag.AlignVCenter, self.sub)
+
+
+# ---------------------------------------------------------------- settings tabs (toolkit 1.2)
+class TabButton(QAbstractButton):
+    def __init__(self, icon: str, text: str, parent=None):
+        super().__init__(parent)
+        self.icon = icon
+        self.setText(text)
+        self.setCheckable(True)
+        self.setAutoExclusive(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedHeight(44)
+        self._h = 0.0
+
+    def sizeHint(self):
+        from PySide6.QtGui import QFontMetrics
+        return QSize(QFontMetrics(font(10, QFont.Weight.Bold)).horizontalAdvance(self.text()) + 58, 44)
+
+    def _set_h(self, v):
+        self._h = float(v)
+        self.update()
+
+    def enterEvent(self, e):
+        animate(self, self._h, 1, 180, self._set_h)
+
+    def leaveEvent(self, e):
+        animate(self, self._h, 0, 220, self._set_h)
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        on = self.isChecked()
+        tile = QRectF(10, 7, 26, 26)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(theme.c("ink") if on else theme.c("panel2"))
+        p.drawRoundedRect(tile, 8, 8)
+        ic = theme.c("on_ink") if on else mix(theme.c("muted"), theme.c("text"), self._h)
+        p.drawPixmap(QPointF(tile.center().x() - 7, tile.center().y() - 7),
+                     icon_pixmap(self.icon, ic, 14, self.devicePixelRatioF()))
+        p.setPen(theme.c("text") if on else mix(theme.c("muted"), theme.c("text"), self._h))
+        p.setFont(font(10, QFont.Weight.Bold))
+        p.drawText(QRectF(tile.right() + 9, 0, self.width(), 40), Qt.AlignmentFlag.AlignVCenter, self.text())
+
+
+class TabBar(QWidget):
+    """Row of TabButtons with a sliding underline. changed(key)."""
+    changed = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.lay = QHBoxLayout(self)
+        self.lay.setContentsMargins(0, 0, 0, 0)
+        self.lay.setSpacing(2)
+        self.lay.addStretch(1)
+        self.buttons: dict[str, TabButton] = {}
+        self.current = ""
+        self._x, self._w = 0.0, 0.0
+        self.setFixedHeight(46)
+
+    def add(self, key: str, icon: str, text: str, separator: QWidget | None = None):
+        if separator is not None:
+            self.lay.insertWidget(self.lay.count() - 1, separator)
+        b = TabButton(icon, text)
+        b.clicked.connect(lambda _=False, k=key: self.select(k))
+        self.lay.insertWidget(self.lay.count() - 1, b)
+        self.buttons[key] = b
+        return b
+
+    def remove(self, key: str):
+        b = self.buttons.pop(key, None)
+        if b:
+            self.lay.removeWidget(b)
+            b.deleteLater()
+
+    def select(self, key: str, animated: bool = True):
+        if key not in self.buttons:
+            return
+        changed = key != self.current
+        self.current = key
+        self.buttons[key].setChecked(True)
+        b = self.buttons[key]
+        tx, tw = float(b.x()), float(b.width())
+        if animated and self._w:
+            x0, w0 = self._x, self._w
+
+            def step(v):
+                self._x, self._w = x0 + (tx - x0) * v, w0 + (tw - w0) * v
+                self.update()
+            animate(self, 0, 1, 380, step, QEasingCurve.Type.OutBack)
+        else:
+            self._x, self._w = tx, tw
+            self.update()
+        if changed:
+            self.changed.emit(key)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        QTimer.singleShot(0, lambda: self.select(self.current, animated=False) if self.current else None)
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.fillRect(QRectF(0, self.height() - 1, self.width(), 1), theme.c("line"))
+        if self._w:
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(theme.c("ink"))
+            p.drawRoundedRect(QRectF(self._x + 6, self.height() - 2.5, self._w - 12, 2.5), 1.2, 1.2)

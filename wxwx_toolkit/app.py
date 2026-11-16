@@ -105,14 +105,15 @@ def main(argv: list[str] | None = None) -> int:
             QTimer.singleShot(600, lambda: win.handle_paths(files))
     if "--smoke" in argv:
         i = argv.index("--smoke")
-        addon = argv[argv.index("--addon") + 1] if "--addon" in argv else None
+        zips = [argv[k + 1] for k, x in enumerate(argv[:-1]) if x == "--addon"]
+        media = argv[argv.index("--media") + 1] if "--media" in argv else None
 
         def hook(*exc):
             import traceback
             win.smoke_errors.append("".join(traceback.format_exception(*exc)))
             sys.__excepthook__(*exc)
         sys.excepthook = hook
-        win.smoke(argv[i + 1], addon)
+        win.smoke(argv[i + 1], zips, media)
     return app.exec()
 
 

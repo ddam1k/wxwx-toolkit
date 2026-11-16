@@ -12,8 +12,16 @@
     host.folders_changed    Signal(str kind)                                       (toolkit 1.1+)
     host.preset_received    Signal(dict)   a .wtp for this add-on was opened (double-click / drop)  (1.1+)
     host.get(key, default=None) / host.set(key, value)   per-add-on settings (JSON-able values)
+    host.get(key, default, addon="compress")   read (only) another add-on's setting, e.g. its presets  (1.2+)
+    host.installed(addon_id) -> bool          is that add-on installed                                 (1.2+)
+    host.open_settings()                      switch to this add-on's tab in Settings                  (1.2+)
+    host.settings_changed   Signal(str key)   emitted after set() — keeps the page and its settings tab in sync (1.2+)
     host.data_dir           Path for the add-on's own files
     host.toolkit_version    str
+
+The add-on's page may also define (toolkit 1.2+ calls them before a hot update / removal):
+    is_busy() -> bool       True while it works; the toolkit then postpones a quiet auto-update
+    shutdown()              stop workers / child processes — the old page is about to be destroyed
 """
 from __future__ import annotations
 
@@ -35,12 +43,15 @@ class Host(QObject):
     theme_changed = Signal(str)
     folders_changed = Signal(str)
     preset_received = Signal(dict)
+    settings_changed = Signal(str)
 
-    def __init__(self, addon_id: str, toast_fn, folder_fn, parent=None):
+    def __init__(self, addon_id: str, toast_fn, folder_fn, parent=None, installed_fn=None, open_settings_fn=None):
         super().__init__(parent)
         self.addon_id = addon_id
         self._toast = toast_fn
         self._folder = folder_fn
+        self._installed = installed_fn or (lambda _aid: False)
+        self._open_settings = open_settings_fn or (lambda _aid: None)
         self._store = QSettings("wxwx", "toolkit")
         self.api_version = API_VERSION
         self.toolkit_version = __version__
@@ -73,8 +84,14 @@ class Host(QObject):
     def folder(self, kind: str = "output") -> str:
         return self._folder(kind)
 
-    def get(self, key: str, default=None):
-        v = self._store.value(f"addon/{self.addon_id}/{key}")
+    def installed(self, addon_id: str) -> bool:
+        return bool(self._installed(addon_id))
+
+    def open_settings(self) -> None:
+        self._open_settings(self.addon_id)
+
+    def get(self, key: str, default=None, addon: str | None = None):
+        v = self._store.value(f"addon/{addon or self.addon_id}/{key}")
         if v is None:
             return default
         try:
@@ -84,3 +101,4 @@ class Host(QObject):
 
     def set(self, key: str, value) -> None:
         self._store.setValue(f"addon/{self.addon_id}/{key}", json.dumps(value))
+        self.settings_changed.emit(key)

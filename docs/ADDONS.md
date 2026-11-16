@@ -27,7 +27,8 @@ wx_<id>/
   "description": {"ru": "Сжатие видео через ffmpeg", "en": "Video compression via ffmpeg"},
   "icon": "video",
   "needs": ["ffmpeg"],
-  "min_toolkit": "1.0.0"
+  "min_toolkit": "1.0.0",
+  "settings": "wx_compress:settings"
 }
 ```
 
@@ -38,6 +39,7 @@ wx_<id>/
 | `icon` | одна из иконок тулкита: `video`, `photo`, `dl`, `music`, `folder`, `addon` |
 | `needs` | общие компоненты: `ffmpeg`, `yt-dlp`. Тулкит скачает их перед установкой аддона |
 | `min_toolkit` | минимальная версия тулкита. Если тулкит старее, аддон не запустится и попросит обновиться |
+| `settings` | необязательно (1.2+): `модуль:функция`, `settings(host) -> QWidget`. Виджет станет вкладкой аддона в «Настройках» |
 
 ## Что получает аддон: `host`
 
@@ -55,16 +57,27 @@ host.folder("downloads")              # папка загрузок (1.1+)
 host.folders_changed                  # Signal(str kind) — пользователь сменил папку (1.1+)
 host.preset_received                  # Signal(dict) — открыли .wtp для этого аддона (1.1+)
 host.get("key", default) / host.set("key", value)   # настройки аддона (любые JSON-значения)
+host.get("presets", [], addon="compress")         # прочитать настройку другого аддона (1.2+)
+host.installed("compress")            # установлен ли другой аддон (1.2+)
+host.open_settings()                  # открыть вкладку этого аддона в «Настройках» (1.2+)
+host.settings_changed                 # Signal(str key) — после host.set(), страница и вкладка настроек видят друг друга (1.2+)
 host.data_dir              # pathlib.Path для своих файлов
 host.toolkit_version       # "1.0.0"
 host.api_version           # 1
 ```
 
+Страница аддона может определить два метода (1.2+), тулкит вызывает их при обновлении на лету и удалении:
+
+```python
+def is_busy(self) -> bool:   # True, пока идёт работа: тихое автообновление подождёт
+def shutdown(self):          # остановить потоки и процессы — старая страница сейчас будет удалена
+```
+
 Стили тулкита применяются ко всему окну, так что в аддоне работают те же objectName:
 `h1`, `sub`, `section`, `accent`, `soft`, `ghost`, `link`, `card`, `row`, `rowTitle`, `rowSub`, `pill`.
 
-Доступные библиотеки: стандартная библиотека Python и PySide6-Essentials (QtCore, QtGui, QtWidgets,
-QtSvg, QtNetwork, QtConcurrent). Если аддону понадобится что-то ещё, это добавляется в сам тулкит
+Доступные библиотеки: стандартная библиотека Python и PySide6: QtCore, QtGui, QtWidgets,
+QtSvg, QtNetwork, QtConcurrent, а с 1.2 ещё QtMultimedia и QtMultimediaWidgets (видео и звук). Если аддону понадобится что-то ещё, это добавляется в сам тулкит
 (`wxwx-toolkit.spec`) и выходит новая версия тулкита. Тогда в манифесте аддона поднимается `min_toolkit`.
 
 ## Пресеты `.wtp`
@@ -90,15 +103,26 @@ QtSvg, QtNetwork, QtConcurrent). Если аддону понадобится ч
 
 ## Как опубликовать
 
-1. У аддона свой репо. Его релиз должен содержать asset **`wxwx-addon-<id>-<version>.zip`**
-2. В `addons.json` этого репо (тулкита) добавляется запись:
+Наши аддоны живут прямо в этом репозитории, в `addons/<id>/` (manifest.json + пакет + `tests/`).
+
+1. Поменять код и поднять `version` в `addons/<id>/manifest.json` (и `__version__` пакета, если он есть).
+2. Actions → **publish add-ons** → Run workflow. Он прогонит тесты, соберёт zip, проверит аддон внутри
+   тулкита и положит **`wxwx-addon-<id>-<version>.zip`** в текущий релиз тулкита (старую версию zip уберёт).
+   Если такая версия уже опубликована, аддон пропускается — значит, забыли поднять версию.
+3. Тулкиты у всех увидят обновление при запуске, по кнопке «Проверить обновления» или сами через 30 минут.
+   Новая версия тулкита для этого не нужна. Сборка тулкита тоже прикладывает zip всех аддонов к своему релизу.
+
+Аддон из чужого репозитория тоже можно добавить: его релиз должен содержать тот же asset, а в `addons.json`
+указывается его `repo`.
+
+Запись в `addons.json`:
 
 ```json
 {
   "addons": [
     {
       "id": "compress",
-      "repo": "ddam1k/wxwx-compress",
+      "repo": "ddam1k/wxwx-toolkit",
       "name": {"ru": "Видео", "en": "Video"},
       "description": {"ru": "MP4, WebM, GIF · CPU или NVENC", "en": "MP4, WebM, GIF · CPU or NVENC"},
       "icon": "video",
@@ -109,8 +133,10 @@ QtSvg, QtNetwork, QtConcurrent). Если аддону понадобится ч
 }
 ```
 
-При следующем запуске тулкит покажет аддон в «Аддонах» с меткой «новое». Новые версии подтянутся сами:
+Тулкит покажет аддон в «Аддонах» с меткой «новое». Новые версии подтянутся сами:
 тулкит сравнивает версию из имени zip в последнем релизе с установленной.
+
+Собрать zip локально: `python scripts/build_addons.py` → `dist/addons/`.
 
 ## Проверить локально
 

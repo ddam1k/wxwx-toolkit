@@ -8,8 +8,11 @@ import urllib.request
 UA = {"User-Agent": "wxwx-toolkit", "Accept": "application/vnd.github+json"}
 
 
-def get_json(url: str, timeout: float = 10):
-    req = urllib.request.Request(url, headers=UA)
+def get_json(url: str, timeout: float = 10, accept: str | None = None):
+    headers = dict(UA, Accept=accept) if accept else UA
+    if "api.github.com" in url and os.environ.get("GITHUB_TOKEN"):     # CI: no 60/h rate limit
+        headers = dict(headers, Authorization=f"Bearer {os.environ['GITHUB_TOKEN']}")
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8"))
 

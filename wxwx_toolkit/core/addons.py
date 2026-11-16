@@ -14,11 +14,15 @@ manifest.json:
       "description": {"ru": "...", "en": "..."},
       "icon": "video",                        one of the toolkit icons (video, photo, dl, music, …)
       "needs": ["ffmpeg"],                    shared components, see components.py
-      "min_toolkit": "1.0.0"
+      "min_toolkit": "1.0.0",
+      "settings": "wx_compress.addon:settings"   optional (toolkit 1.2+): settings(host) -> QWidget,
+                                                 shown as the add-on's tab in Settings
     }
 
 The catalog (addons.json in the toolkit repo) lists add-ons and the GitHub repo each one is
-released from; the zip is the release asset named  wxwx-addon-<id>-<version>.zip
+released from; the zip is the release asset named  wxwx-addon-<id>-<version>.zip.
+Our own add-ons live in the toolkit repo (addons/<id>/) and their zips are attached to the
+current toolkit release, so an add-on update never needs a new toolkit version.
 """
 from __future__ import annotations
 
@@ -38,6 +42,8 @@ from .paths import addons_dir, downloads_tmp
 from .updater import is_newer, parse_version
 
 CATALOG_URL = f"https://raw.githubusercontent.com/{REPO}/main/addons.json"
+# the API is not behind the raw CDN cache (~5 min), so "check for updates" sees a fresh catalog
+CATALOG_API = f"https://api.github.com/repos/{REPO}/contents/addons.json?ref=main"
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
 
 
@@ -52,6 +58,7 @@ class Manifest:
     needs: list = field(default_factory=list)
     min_toolkit: str = "1.0.0"
     path: Path | None = None
+    settings: str | None = None
 
     @classmethod
     def from_dict(cls, d: dict, path: Path | None = None) -> "Manifest":
@@ -67,7 +74,8 @@ class Manifest:
             desc = {"en": desc, "ru": desc}
         return cls(id=d["id"], version=str(d.get("version", "0.0.0")), entry=d["entry"], name=name,
                    description=desc, icon=d.get("icon", "addon"), needs=list(d.get("needs", [])),
-                   min_toolkit=str(d.get("min_toolkit", "1.0.0")), path=path)
+                   min_toolkit=str(d.get("min_toolkit", "1.0.0")), path=path,
+                   settings=d["settings"] if ":" in str(d.get("settings") or "") else None)
 
     def title(self, lang: str) -> str:
         return self.name.get(lang) or self.name.get("en") or self.id
@@ -156,14 +164,25 @@ def uninstall(addon_id: str) -> None:
 
 def load(m: Manifest, host):
     """Imports the add-on and calls its entry with the host API; returns its QWidget."""
+    return _call(m, m.entry, host, fresh=True)
+
+
+def load_settings(m: Manifest, host):
+    """The add-on's settings tab (manifest "settings"), or None. Call after load()."""
+    return _call(m, m.settings, host, fresh=False) if m.settings else None
+
+
+def _call(m: Manifest, entry: str, host, fresh: bool):
     path = str(m.path)
     if path not in sys.path:
         sys.path.insert(0, path)
-    module_name, func_name = m.entry.split(":", 1)
+    module_name, func_name = entry.split(":", 1)
     top = module_name.split(".")[0]
-    for name in list(sys.modules):  # fresh import after an update in the same session
-        if name == top or name.startswith(top + "."):
-            del sys.modules[name]
+    if fresh:
+        importlib.invalidate_caches()
+        for name in list(sys.modules):  # fresh import after an update in the same session
+            if name == top or name.startswith(top + "."):
+                del sys.modules[name]
     module = importlib.import_module(module_name)
     return getattr(module, func_name)(host)
 
@@ -192,14 +211,26 @@ def resolve_release(entry: CatalogEntry, release: dict) -> CatalogEntry:
     return entry
 
 
+def _catalog_json() -> dict:
+    try:
+        return net.get_json(CATALOG_API, accept="application/vnd.github.raw+json")
+    except Exception:
+        return net.get_json(CATALOG_URL)
+
+
 def fetch_catalog() -> list[CatalogEntry]:
-    """Catalog + latest release of each add-on. Network errors for one add-on don't hide the rest."""
-    entries = parse_catalog(net.get_json(CATALOG_URL))
+    """Catalog + latest release of each add-on. Network errors for one add-on don't hide the rest.
+    Add-ons sharing a repo (all of ours live in the toolkit repo) cost one request together."""
+    entries = parse_catalog(_catalog_json())
+    releases: dict[str, dict | None] = {}
     for e in entries:
-        try:
-            resolve_release(e, net.latest_release(e.repo))
-        except Exception:
-            pass
+        if e.repo not in releases:
+            try:
+                releases[e.repo] = net.latest_release(e.repo)
+            except Exception:
+                releases[e.repo] = None
+        if releases[e.repo]:
+            resolve_release(e, releases[e.repo])
     return entries
 
 

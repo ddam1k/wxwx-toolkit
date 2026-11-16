@@ -3,16 +3,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
-                               QScrollArea, QVBoxLayout, QWidget)
+                               QScrollArea, QStackedWidget, QVBoxLayout, QWidget)
 
 from ..core.addons import CatalogEntry, Manifest
 from ..core.components import COMPONENTS
 from ..core.i18n import fmt_size, lang, t
 from ..core.paths import data_dir
-from .shell import IconTile, LangCard, SwitchRow
+from .shell import IconTile, LangCard, SwitchRow, TabBar
 from .widgets import FlowLayout, ProgressButton, animate
 
 
@@ -217,6 +217,9 @@ class StorePage(Page):
         tv.addWidget(self.h1)
         tv.addWidget(self.sub)
         head.addLayout(tv, 1)
+        self.check_btn = button("", "ghost")
+        self.check_btn.clicked.connect(self.retry_clicked)
+        head.addWidget(self.check_btn, 0, Qt.AlignmentFlag.AlignTop)
         self.from_file = button("", "ghost")
         self.from_file.clicked.connect(self.install_file_clicked)
         head.addWidget(self.from_file, 0, Qt.AlignmentFlag.AlignTop)
@@ -256,7 +259,10 @@ class StorePage(Page):
 
     def refresh(self) -> None:
         self.h1.setText(t("addons"))
-        self.sub.setText(t("store_sub"))
+        checked = getattr(self.ctx, "catalog_checked", None)
+        self.sub.setText(t("store_sub") + (f" · {t('checked_at', t=checked)}" if checked else ""))
+        self.check_btn.setText(t("checking") if self.ctx.catalog_state == "loading" else t("check_addons"))
+        self.check_btn.setEnabled(self.ctx.catalog_state != "loading")
         self.from_file.setText(t("from_file"))
         self.sec_avail.setText(t("available"))
         self.sec_comp.setText(t("shared"))
@@ -303,11 +309,7 @@ class SettingsPage(Page):
     def __init__(self, ctx):
         super().__init__(max_width=640)
         self.ctx = ctx
-        self.h1 = label("", "h1")
-        self.sub = label("", "sub")
-        self.col.addWidget(self.h1)
-        self.col.addSpacing(3)
-        self.col.addWidget(self.sub)
+        self.col.setContentsMargins(28, 0, 28, 24)
         self.sec_lang = self._section()
         row = QHBoxLayout()
         row.setSpacing(8)
@@ -388,8 +390,6 @@ class SettingsPage(Page):
         return lb
 
     def refresh(self) -> None:
-        self.h1.setText(t("settings"))
-        self.sub.setText(t("settings_sub"))
         self.sec_lang.setText(t("language"))
         self.sec_upd.setText(t("updates"))
         self.sec_data.setText(t("data"))
@@ -412,6 +412,104 @@ class SettingsPage(Page):
         for key, r in self.rows.items():
             r.set_texts(t(key), t(key + "_s"))
             r.switch.set_now(self.ctx.option(key))
+
+
+class AddonSettingsPage(Page):
+    """An add-on's tab in Settings: its header + the widget from manifest "settings"."""
+
+    def __init__(self, icon: str, widget: QWidget):
+        super().__init__(max_width=640)
+        self.col.setContentsMargins(28, 22, 28, 24)
+        head = QFrame()
+        head.setObjectName("row")
+        hl = QHBoxLayout(head)
+        hl.setContentsMargins(14, 12, 14, 12)
+        hl.setSpacing(13)
+        hl.addWidget(IconTile(icon, 42))
+        tv = QVBoxLayout()
+        tv.setSpacing(1)
+        self.title, self.sub = label("", "rowTitle"), label("", "rowSub")
+        tv.addWidget(self.title)
+        tv.addWidget(self.sub)
+        hl.addLayout(tv, 1)
+        self.col.addWidget(head)
+        self.col.addSpacing(6)
+        self.col.addWidget(widget)
+        self.col.addStretch()
+        self.widget = widget
+
+    def set_texts(self, title: str, sub: str):
+        self.title.setText(title)
+        self.sub.setText(sub)
+
+
+class SettingsHub(QWidget):
+    """Settings = the toolkit's own page + a tab for every add-on that has settings (toolkit 1.2+)."""
+
+    def __init__(self, general: SettingsPage):
+        super().__init__()
+        self.setObjectName("page")
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        head = QVBoxLayout()
+        head.setContentsMargins(28, 24, 28, 0)
+        head.setSpacing(3)
+        self.h1, self.sub = label("", "h1"), label("", "sub")
+        head.addWidget(self.h1)
+        head.addWidget(self.sub)
+        head.addSpacing(14)
+        self.tabs = TabBar()
+        head.addWidget(self.tabs)
+        lay.addLayout(head)
+        self.stack = QStackedWidget()
+        lay.addWidget(self.stack, 1)
+        self.general = general
+        self.pages: dict[str, QWidget] = {"general": general}
+        self.stack.addWidget(general)
+        self.tabs.add("general", "settings", "")
+        self.sep = label("", "tabSep")
+        self.tabs.changed.connect(self._show)
+        QTimer.singleShot(0, lambda: self.tabs.select("general", animated=False))
+
+    def set_addon(self, aid: str, icon: str, page: QWidget | None):
+        old = self.pages.pop(aid, None)
+        if old is not None:
+            self.stack.removeWidget(old)
+            old.deleteLater()
+            self.tabs.remove(aid)
+        if page is not None:
+            self.pages[aid] = page
+            self.stack.addWidget(page)
+            first = len(self.pages) == 2
+            self.tabs.add(aid, icon, "", separator=self.sep if first else None)
+        self.sep.setVisible(len(self.pages) > 1)
+        if self.tabs.current not in self.pages:
+            self.tabs.select("general", animated=False)
+        else:
+            QTimer.singleShot(0, lambda: self.tabs.select(self.tabs.current, animated=False))
+
+    def set_titles(self, titles: dict[str, str]):
+        for k, b in self.tabs.buttons.items():
+            b.setText(titles.get(k, k))
+            b.updateGeometry()
+        QTimer.singleShot(0, lambda: self.tabs.select(self.tabs.current, animated=False))
+
+    def open(self, key: str):
+        self.tabs.select(key if key in self.pages else "general")
+
+    def _show(self, key: str):
+        w = self.pages.get(key)
+        if w is None:
+            return
+        self.stack.setCurrentWidget(w)
+        if hasattr(w, "fade_in"):
+            w.fade_in()
+
+    def fade_in(self):
+        w = self.stack.currentWidget()
+        if hasattr(w, "fade_in"):
+            w.fade_in()
 
 
 # ---------------------------------------------------------------- add-on failed to load

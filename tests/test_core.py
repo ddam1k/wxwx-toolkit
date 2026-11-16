@@ -35,7 +35,7 @@ class AddonTests(unittest.TestCase):
             with self.subTest(nested=nested):
                 z = make_zip(ROOT / "examples" / "hello-addon", self.tmp / f"h{nested}.zip", nested)
                 m = addons.install_zip(str(z))
-                self.assertEqual((m.id, m.version, m.icon), ("hello", "1.0.0", "addon"))
+                self.assertEqual((m.id, m.version, m.icon), ("hello", "1.1.0", "addon"))
                 self.assertIn("hello", addons.installed())
                 self.assertTrue((addons.installed()["hello"].path / "wx_hello" / "__init__.py").is_file())
                 self.assertEqual(m.title("ru"), "Привет")
@@ -97,6 +97,42 @@ class AddonTests(unittest.TestCase):
         data = json.loads((ROOT / "addons.json").read_text("utf-8"))
         self.assertIn("addons", data)
         self.assertEqual(len(addons.parse_catalog(data)), len(data["addons"]))
+
+
+class RepoAddonTests(unittest.TestCase):
+    """The add-ons kept in this repo (addons/<id>/) build into zips the toolkit accepts."""
+
+    def test_every_repo_addon_builds_and_installs(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("build_addons", ROOT / "scripts" / "build_addons.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        out = Path(tempfile.mkdtemp())
+        folders = [p for p in (ROOT / "addons").iterdir() if (p / "manifest.json").is_file()]
+        self.assertTrue(folders)
+        listed = {a["id"]: a for a in json.loads((ROOT / "addons.json").read_text("utf-8"))["addons"]}
+        for f in folders:
+            aid, ver, z = mod.build(f, out)
+            self.assertEqual(z.name, f"wxwx-addon-{aid}-{ver}.zip")
+            with zipfile.ZipFile(z) as zz:
+                self.assertFalse([n for n in zz.namelist() if "tests/" in n or "__pycache__" in n])
+            m = addons.install_zip(str(z))
+            self.assertEqual((m.id, m.version), (aid, ver))
+            self.assertIn(aid, listed, f"{aid} is not in addons.json")
+            self.assertEqual(listed[aid]["repo"], "ddam1k/wxwx-toolkit")
+            addons.uninstall(aid)
+
+    def test_settings_entry_and_release_with_addon_zips(self):
+        m = addons.Manifest.from_dict({"id": "x", "entry": "a:b", "settings": "a:settings"})
+        self.assertEqual(m.settings, "a:settings")
+        self.assertIsNone(addons.Manifest.from_dict({"id": "x", "entry": "a:b", "settings": "nope"}).settings)
+        # a toolkit release that also carries add-on zips: the toolkit updater still picks its installer
+        rel = {"tag_name": "v1.2.0", "assets": [
+            {"name": "wxwx-addon-compress-1.1.1.zip", "browser_download_url": "z", "size": 1},
+            {"name": "wxwx-toolkit-setup-1.2.0.exe", "browser_download_url": "s", "size": 2}]}
+        self.assertEqual(updater.release_from_json(rel, "1.1.0").asset_url, "s")
+        e = addons.parse_catalog({"addons": [{"id": "compress", "repo": "ddam1k/wxwx-toolkit"}]})[0]
+        self.assertEqual(addons.resolve_release(e, rel).latest, "1.1.1")
 
 
 class PresetTests(unittest.TestCase):
