@@ -832,7 +832,11 @@ class Toast(QWidget):
     def _place(self):
         par = self.parentWidget()
         f = font(9.8, QFont.Weight.Bold)
-        w = int(QFontMetricsF(f).horizontalAdvance(self.text)) + 38
+        # boundingRect lays the text out with fallback fonts (emoji, « ») — advance alone can come out short
+        fm = QFontMetricsF(f)
+        w = int(max(fm.horizontalAdvance(self.text), fm.boundingRect(self.text).width(),
+                    fm.boundingRect(QRectF(0, 0, 4000, 60), Qt.AlignmentFlag.AlignLeft, self.text).width())) + 52
+        w = min(w, max(120, par.width() - 40))
         y = par.height() - 70 + round(24 * (1 - self._o))
         area = max(w, par.width() - self.right_inset)
         self.setGeometry((area - w) // 2, y, w, 42)
