@@ -563,9 +563,10 @@ class TabBar(QWidget):
         self._x, self._w = 0.0, 0.0
         self.setFixedHeight(46)
 
-    def add(self, key: str, icon: str, text: str, separator: QWidget | None = None):
-        if separator is not None:
-            self.lay.insertWidget(self.lay.count() - 1, separator)
+    def add_widget(self, w: QWidget):
+        self.lay.insertWidget(self.lay.count() - 1, w)
+
+    def add(self, key: str, icon: str, text: str):
         b = TabButton(icon, text)
         b.clicked.connect(lambda _=False, k=key: self.select(k))
         self.lay.insertWidget(self.lay.count() - 1, b)

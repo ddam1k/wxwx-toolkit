@@ -469,6 +469,8 @@ class SettingsHub(QWidget):
         self.stack.addWidget(general)
         self.tabs.add("general", "settings", "")
         self.sep = label("", "tabSep")
+        self.tabs.add_widget(self.sep)
+        self.sep.hide()
         self.tabs.changed.connect(self._show)
         QTimer.singleShot(0, lambda: self.tabs.select("general", animated=False))
 
@@ -481,8 +483,7 @@ class SettingsHub(QWidget):
         if page is not None:
             self.pages[aid] = page
             self.stack.addWidget(page)
-            first = len(self.pages) == 2
-            self.tabs.add(aid, icon, "", separator=self.sep if first else None)
+            self.tabs.add(aid, icon, "")
         self.sep.setVisible(len(self.pages) > 1)
         if self.tabs.current not in self.pages:
             self.tabs.select("general", animated=False)
