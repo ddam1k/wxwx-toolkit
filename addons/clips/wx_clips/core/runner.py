@@ -88,6 +88,7 @@ class ClipJob(QObject):
                 except ValueError:
                     pass
         code = self._proc.wait()
+        self._proc.stdout.close()
         if self._stopped:
             return False, "stopped"
         if code != 0 or not os.path.isfile(step.out):

@@ -32,10 +32,10 @@ class SettingsTab(QWidget):
 
     def render(self):
         while self.col.count():
-            it = self.col.takeAt(0)
-            if it.widget():
-                it.widget().setParent(None)
-                it.widget().deleteLater()
+            w = self.col.takeAt(0).widget()
+            if w is not None:
+                w.setParent(None)
+                w.deleteLater()
         h = self.host
         nv = h.get("nv_dir", "") or ""
         self._section(t("s_folder"))
