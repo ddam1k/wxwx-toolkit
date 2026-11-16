@@ -845,6 +845,8 @@ class Toast(QWidget):
         self.text = text
         self.show()
         self.raise_()
+        self._place()      # if a toast is already fully shown the animation below emits nothing
+        self.update()
         animate(self, self._o, 1, 450, self._set_o, QEasingCurve.Type.OutBack)
         self._timer.start(ms)
 
