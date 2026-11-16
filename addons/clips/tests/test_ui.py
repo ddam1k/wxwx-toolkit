@@ -87,7 +87,8 @@ class ClipsUiSmoke(unittest.TestCase):
         from wx_clips import addon
         page = addon.create(host)
         win = QWidget()
-        win.setStyleSheet("background:#111113")
+        win.setObjectName("testWin")
+        win.setStyleSheet("#testWin{background:#111113}")
         QVBoxLayout(win).addWidget(page)
         win.layout().setContentsMargins(0, 0, 0, 0)
         win.resize(1180, 760)
@@ -163,6 +164,7 @@ class ClipsUiSmoke(unittest.TestCase):
         tab = addon.settings(host)
         tab.resize(640, 640)
         tab.setStyleSheet(tab.styleSheet() + "#clipsSettings{background:#111113}")
+        tab.setContentsMargins(24, 0, 24, 24)
         tab.setAttribute(__import__("PySide6.QtCore", fromlist=["Qt"]).Qt.WidgetAttribute.WA_StyledBackground, True)
         tab.show()
         spin(0.6)

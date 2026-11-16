@@ -230,6 +230,8 @@ class ClipsPage(QWidget):
 
     def _clip_ready(self, c: Clip, m):
         c.ready(m)
+        c.thumb = c.thumb or self._thumb.get(c.path)
+        c.frames = c.frames or self._frames.get(c.path) or []
         c.mode = self.def_mode
         c.merge = self.def_merge
         self.frames(c.path)

@@ -653,8 +653,9 @@ class EditorView(QWidget):
         sc.setWidgetResizable(True)
         sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         body = QWidget()
+        body.setFixedWidth(PANEL_W - 10)          # long paths / notes wrap or elide instead of widening the panel
         bl = QVBoxLayout(body)
-        bl.setContentsMargins(20, 0, 20, 6)
+        bl.setContentsMargins(20, 0, 14, 6)
         bl.setSpacing(0)
         sc.setWidget(body)
         v.addWidget(sc, 1)
@@ -780,6 +781,7 @@ class EditorView(QWidget):
         tv = QVBoxLayout()
         tv.setSpacing(2)
         self.dest_path = label("", "destPath")
+        self.dest_path.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.dest_sub = label("", "destSub")
         tv.addWidget(self.dest_path)
         tv.addWidget(self.dest_sub)
@@ -803,6 +805,7 @@ class EditorView(QWidget):
         self.b_go.clicked.connect(self.export)
         fl.addWidget(self.b_go)
         self.saveto = label("", "saveTo")
+        self.saveto.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.saveto.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.saveto.setTextFormat(Qt.TextFormat.RichText)
         fl.addWidget(self.saveto)
@@ -1357,6 +1360,8 @@ class EditorView(QWidget):
         d = ctx.dest_dir()
         mode = "toolkit" if ctx.use_tk else ctx.own_mode
         self.dest_box.setVisible(mode in ("toolkit", "custom"))
+        if d:
+            self.dest_path.setToolTip(d)
         if mode == "toolkit":
             self.dest_path.setText(d or "—")
             self.dest_sub.setText(t("same_tk_s"))
