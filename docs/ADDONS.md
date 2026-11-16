@@ -50,6 +50,10 @@ host.theme_changed         # Signal(str)
 host.component("ffmpeg")              # путь к ffmpeg.exe или None
 host.component("ffmpeg", "ffprobe")   # путь к ffprobe.exe
 host.toast("Готово ✨")                # всплывающее уведомление тулкита
+host.folder("output")                 # папка готовых файлов из настроек тулкита (1.1+)
+host.folder("downloads")              # папка загрузок (1.1+)
+host.folders_changed                  # Signal(str kind) — пользователь сменил папку (1.1+)
+host.preset_received                  # Signal(dict) — открыли .wtp для этого аддона (1.1+)
 host.get("key", default) / host.set("key", value)   # настройки аддона (любые JSON-значения)
 host.data_dir              # pathlib.Path для своих файлов
 host.toolkit_version       # "1.0.0"
@@ -62,6 +66,27 @@ host.api_version           # 1
 Доступные библиотеки: стандартная библиотека Python и PySide6-Essentials (QtCore, QtGui, QtWidgets,
 QtSvg, QtNetwork, QtConcurrent). Если аддону понадобится что-то ещё, это добавляется в сам тулкит
 (`wxwx-toolkit.spec`) и выходит новая версия тулкита. Тогда в манифесте аддона поднимается `min_toolkit`.
+
+## Пресеты `.wtp`
+
+Общий формат пресетов для всех аддонов: JSON-файл с расширением `.wtp`.
+
+```json
+{
+  "wtp": 1,
+  "addon": "compress",
+  "addon_name": "Видео",
+  "addon_version": "1.1.0",
+  "name": "Discord 10 МБ",
+  "author": "yuyu",
+  "created": "2026-11-16",
+  "settings": { "...": "что угодно, это решает аддон" }
+}
+```
+
+Экспорт и импорт внутри своего интерфейса аддон делает сам. Тулкит берёт на себя остальное:
+двойной клик по `.wtp` в проводнике или перетаскивание файла на окно. Он открывает аддон с нужным `addon`
+и отправляет ему `host.preset_received(dict)`. Если такой аддон не установлен, тулкит так и скажет.
 
 ## Как опубликовать
 

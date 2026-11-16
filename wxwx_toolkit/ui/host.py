@@ -8,6 +8,9 @@
     host.theme_changed      Signal(str)
     host.component(name, exe=None) -> str | None     path to e.g. ffmpeg / ffprobe / yt-dlp
     host.toast(text)
+    host.folder("output" | "downloads") -> str   the toolkit-wide folders from Settings  (toolkit 1.1+)
+    host.folders_changed    Signal(str kind)                                       (toolkit 1.1+)
+    host.preset_received    Signal(dict)   a .wtp for this add-on was opened (double-click / drop)  (1.1+)
     host.get(key, default=None) / host.set(key, value)   per-add-on settings (JSON-able values)
     host.data_dir           Path for the add-on's own files
     host.toolkit_version    str
@@ -30,11 +33,14 @@ API_VERSION = 1
 class Host(QObject):
     lang_changed = Signal(str)
     theme_changed = Signal(str)
+    folders_changed = Signal(str)
+    preset_received = Signal(dict)
 
-    def __init__(self, addon_id: str, toast_fn, parent=None):
+    def __init__(self, addon_id: str, toast_fn, folder_fn, parent=None):
         super().__init__(parent)
         self.addon_id = addon_id
         self._toast = toast_fn
+        self._folder = folder_fn
         self._store = QSettings("wxwx", "toolkit")
         self.api_version = API_VERSION
         self.toolkit_version = __version__
@@ -63,6 +69,9 @@ class Host(QObject):
 
     def toast(self, text: str) -> None:
         self._toast(text)
+
+    def folder(self, kind: str = "output") -> str:
+        return self._folder(kind)
 
     def get(self, key: str, default=None):
         v = self._store.value(f"addon/{self.addon_id}/{key}")

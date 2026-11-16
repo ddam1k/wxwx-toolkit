@@ -52,6 +52,13 @@ STR = {
         "upd_latest": "У тебя последняя версия ✨", "upd_fail": "Не получилось проверить обновления",
         "upd_checking": "проверяю…", "upd_cancelled": "Установка отменена", "upd_page": "Скачай установщик со страницы релиза",
         "addon_zip": "Аддон (*.zip)", "choose_zip": "Выбери zip аддона",
+        "folders": "ПАПКИ", "f_output": "Готовые файлы", "f_downloads": "Загрузки", "change": "Изменить",
+        "choose_folder": "Выбери папку",
+        "folders_note": "Инструменты с включённым «Как в настройках тулкита» сохраняют сюда. В каждом можно выбрать и свою папку.",
+        "presets": "ПРЕСЕТЫ", "wtp_title": "Файлы пресетов .wtp",
+        "wtp_sub": "двойной клик по .wtp открывает тулкит и передаёт пресет нужному аддону",
+        "wtp_missing": "Это пресет для аддона «{n}» — сначала установи его",
+        "wtp_bad": "Это не файл пресета .wtp",
     },
     "en": {
         "tools": "TOOLS", "toolkit": "TOOLKIT", "addons": "Add-ons", "settings": "Settings",
@@ -84,6 +91,13 @@ STR = {
         "upd_latest": "You're on the latest version ✨", "upd_fail": "Couldn't check for updates",
         "upd_checking": "checking…", "upd_cancelled": "Installation cancelled", "upd_page": "Get the installer from the release page",
         "addon_zip": "Add-on (*.zip)", "choose_zip": "Pick an add-on zip",
+        "folders": "FOLDERS", "f_output": "Finished files", "f_downloads": "Downloads", "change": "Change",
+        "choose_folder": "Choose a folder",
+        "folders_note": "Tools with “Same as toolkit settings” turned on save here. Each tool can also use its own folder.",
+        "presets": "PRESETS", "wtp_title": ".wtp preset files",
+        "wtp_sub": "double-click a .wtp to open the toolkit and hand the preset to its add-on",
+        "wtp_missing": "This preset is for the “{n}” add-on — install it first",
+        "wtp_bad": "Not a .wtp preset file",
     },
 }
 

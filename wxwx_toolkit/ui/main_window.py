@@ -14,7 +14,9 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel, Q
 from qframelesswindow import FramelessMainWindow
 
 from .. import APP_NAME, __version__
-from ..core import addons, components, i18n, updater
+from pathlib import Path
+
+from ..core import addons, components, i18n, presets, updater
 from ..core.addons import CatalogEntry, Manifest
 from ..core.i18n import t
 from ..core.paths import data_dir
@@ -86,6 +88,7 @@ class MainWindow(FramelessMainWindow):
         self.smoke_errors: list[str] = []
 
         self._build()
+        self.setAcceptDrops(True)
         self.resize(1180, 760)
         self.setMinimumSize(940, 620)
         geo = self.store.value("geometry")
@@ -187,6 +190,7 @@ class MainWindow(FramelessMainWindow):
         self.settings_page = SettingsPage(self)
         self.settings_page.lang_chosen.connect(self.set_lang)
         self.settings_page.option_changed.connect(self.set_option)
+        self.settings_page.folder_change.connect(self.change_folder)
         self.pages["store"] = self.store_page
         self.pages["settings"] = self.settings_page
         self.stack.addWidget(self.store_page)
@@ -212,6 +216,55 @@ class MainWindow(FramelessMainWindow):
         known = {e.id for e in self.catalog}
         out += [CardModel(aid, None, m) for aid, m in self.installed.items() if aid not in known]
         return out
+
+    DEFAULT_FOLDERS = {"output": Path.home() / "Videos" / "wxwx", "downloads": Path.home() / "Downloads" / "wxwx"}
+
+    def folder(self, kind: str = "output") -> str:
+        v = self.store.value(f"folder/{kind}")
+        return str(v) if v else str(self.DEFAULT_FOLDERS.get(kind, self.DEFAULT_FOLDERS["output"]))
+
+    def change_folder(self, kind: str):
+        d = QFileDialog.getExistingDirectory(self, t("choose_folder"), self.folder(kind))
+        if not d:
+            return
+        self.store.setValue(f"folder/{kind}", os.path.normpath(d))
+        self.settings_page.refresh()
+        for h in self.hosts.values():
+            h.folders_changed.emit(kind)
+
+    # ---------------------------------------------------- .wtp presets
+    def handle_paths(self, paths: list[str]):
+        for p in paths:
+            if p.lower().endswith(presets.EXT):
+                self.open_wtp(p)
+
+    def open_wtp(self, path: str) -> bool:
+        try:
+            data = presets.read(path)
+        except presets.PresetError:
+            self.toast.show_text(t("wtp_bad"))
+            return False
+        aid = data["addon"]
+        if aid not in self.hosts or aid not in self.installed:
+            self.toast.show_text(t("wtp_missing", n=data.get("addon_name") or aid), 4500)
+            self.go("store")
+            return False
+        self.go(aid)
+        self.hosts[aid].preset_received.emit(data)
+        return True
+
+    def bring_to_front(self):
+        if self.isMinimized():
+            self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def dragEnterEvent(self, e):
+        if any(u.toLocalFile().lower().endswith(presets.EXT) for u in e.mimeData().urls()):
+            e.acceptProposedAction()
+
+    def dropEvent(self, e):
+        self.handle_paths([u.toLocalFile() for u in e.mimeData().urls() if u.isLocalFile()])
 
     def open_data_folder(self):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(data_dir())))
@@ -266,7 +319,7 @@ class MainWindow(FramelessMainWindow):
     # ======================================================== add-on pages
     def _load_addon(self, m: Manifest):
         self._unload_addon(m.id)
-        host = Host(m.id, self.toast.show_text, self)
+        host = Host(m.id, self.toast.show_text, self.folder, self)
         title = m.title(i18n.lang())
         if not m.compatible:
             widget = ErrorPage(title, t("needs_toolkit", v=m.min_toolkit))
@@ -584,7 +637,14 @@ class MainWindow(FramelessMainWindow):
                     self.smoke_errors.append("install_zip failed")
                     return
                 self.go(m.id)
-            steps += [add, snap("_addon")]
+
+            def wtp():
+                import tempfile
+                f = Path(tempfile.gettempdir()) / "smoke-preset.wtp"
+                presets.write(f, presets.make("hello", "Smoke preset", {"x": 1}, "Hello", "1.0.0", "ci"))
+                if not self.open_wtp(str(f)):
+                    self.smoke_errors.append("open_wtp failed")
+            steps += [add, wtp, snap("_addon")]
         steps += [lambda: self.go("settings"), lambda: self.set_lang("en"), snap("_settings_en"),
                   lambda: self.go("store"), self.on_theme, snap("_light")]
 

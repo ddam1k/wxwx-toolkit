@@ -36,6 +36,7 @@ SolidCompression=yes
 WizardStyle=modern
 CloseApplications=force
 RestartApplications=no
+ChangesAssociations=yes
 
 [Languages]
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
@@ -50,6 +51,13 @@ Type: filesandordirs; Name: "{app}\_internal"
 [Files]
 Source: "{#SrcDir}\{#ExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SrcDir}\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Registry]
+; .wtp = wxwx toolkit preset: double-click opens the toolkit and hands the preset to its add-on
+Root: HKA; Subkey: "Software\Classes\.wtp"; ValueType: string; ValueName: ""; ValueData: "wxwx.preset"; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\wxwx.preset"; ValueType: string; ValueName: ""; ValueData: "wxwx toolkit preset"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\wxwx.preset\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#ExeName},0"
+Root: HKA; Subkey: "Software\Classes\wxwx.preset\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#ExeName}"" ""%1"""
 
 [Icons]
 Name: "{autoprograms}\wxwx toolkit"; Filename: "{app}\{#ExeName}"

@@ -31,6 +31,12 @@ def create(host):
         btn.setText(b)
 
     btn.clicked.connect(lambda: host.toast(TEXT.get(host.lang, TEXT["en"])[0]))
+
+    preset = QLabel()
+    preset.setObjectName("sub")
+    lay.insertWidget(2, preset)
+    if hasattr(host, "preset_received"):  # toolkit 1.1+
+        host.preset_received.connect(lambda d: preset.setText(f"✓ preset: {d['name']} · {d['settings']}"))
     host.lang_changed.connect(retranslate)
     host.theme_changed.connect(retranslate)
     retranslate()

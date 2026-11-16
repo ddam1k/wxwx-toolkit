@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 os.environ["WXWX_TOOLKIT_DATA"] = tempfile.mkdtemp(prefix="wxwx-data-")
 
-from wxwx_toolkit.core import addons, components, i18n, updater  # noqa: E402
+from wxwx_toolkit.core import addons, components, i18n, presets, updater  # noqa: E402
 
 
 def make_zip(src: Path, dest: Path, nested: bool = False) -> Path:
@@ -97,6 +97,26 @@ class AddonTests(unittest.TestCase):
         data = json.loads((ROOT / "addons.json").read_text("utf-8"))
         self.assertIn("addons", data)
         self.assertEqual(len(addons.parse_catalog(data)), len(data["addons"]))
+
+
+class PresetTests(unittest.TestCase):
+    def test_roundtrip(self):
+        d = Path(tempfile.mkdtemp())
+        data = presets.make("compress", "Discord 10 МБ", {"format": "mp4", "size_mb": 10}, "Видео", "1.1.0", "yuyu")
+        p = presets.write(d / presets.safe_filename('a/b:c'), data)
+        self.assertEqual(p.suffix, ".wtp")
+        back = presets.read(p)
+        self.assertEqual((back["addon"], back["name"], back["settings"]["size_mb"]), ("compress", "Discord 10 МБ", 10))
+
+    def test_rejects(self):
+        d = Path(tempfile.mkdtemp())
+        (d / "x.wtp").write_text("not json")
+        with self.assertRaises(presets.PresetError):
+            presets.read(d / "x.wtp")
+        with self.assertRaises(presets.PresetError):
+            presets.parse({"wtp": 1, "settings": {}})
+        with self.assertRaises(presets.PresetError):
+            presets.parse({"wtp": 2, "addon": "a", "settings": {}})
 
 
 class MiscTests(unittest.TestCase):
