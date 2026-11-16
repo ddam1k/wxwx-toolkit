@@ -1,0 +1,140 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish a release v<__version__> from this commit"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      WXWX_TOOLKIT_DATA: ${{ github.workspace }}\ci-data
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Version
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = python -c "import wxwx_toolkit as w; print(w.__version__)"
+          "VERSION=$v" >> $env:GITHUB_ENV
+          if ($env:GITHUB_REF -like 'refs/tags/v*' -and $env:GITHUB_REF_NAME -ne "v$v") {
+            throw "tag $env:GITHUB_REF_NAME does not match __version__ $v"
+          }
+          if ("${{ inputs.release }}" -eq "true") {
+            gh release view "v$v" -R "${{ github.repository }}" 2>$null
+            if ($LASTEXITCODE -eq 0) { throw "release v$v already exists - bump __version__ first" }
+            $global:LASTEXITCODE = 0
+          }
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Shared components download (ffmpeg, yt-dlp)
+        run: >
+          python -c "from wxwx_toolkit.core import components as c;
+          [print(k, c.install(k), c.COMPONENTS[k].version()) for k in ('yt-dlp', 'ffmpeg')];
+          assert all(x.installed_locally for x in c.COMPONENTS.values())"
+
+      - name: Build example add-on
+        run: >
+          python -c "import zipfile, pathlib; src = pathlib.Path('examples/hello-addon');
+          z = zipfile.ZipFile('hello-addon.zip', 'w');
+          [z.write(f, f.relative_to(src)) for f in src.rglob('*') if f.is_file() and '__pycache__' not in f.parts]; z.close()"
+
+      - name: Smoke test (real UI, catalog from GitHub, example add-on)
+        shell: pwsh
+        run: |
+          python run.py --smoke smoke.png --addon hello-addon.zip
+          if ($LASTEXITCODE -ne 0) { throw "smoke test exit code $LASTEXITCODE" }
+
+      - name: Print screenshots as base64 (manual runs only)
+        if: github.event_name == 'workflow_dispatch' && !inputs.release
+        run: >
+          python -c "import base64,glob,textwrap;
+          [print('==SHOT '+f+'\n'+'\n'.join(textwrap.wrap(base64.b64encode(open(f,'rb').read()).decode(),3000))+'\n==END') for f in sorted(glob.glob('smoke*.png'))]"
+
+      - name: Build exe
+        run: pyinstaller --noconfirm wxwx-toolkit.spec
+
+      - name: Check exe starts and loads an add-on
+        shell: pwsh
+        run: |
+          $p = Start-Process dist/wxwx-toolkit/wxwx-toolkit.exe -ArgumentList '--smoke', "$pwd\exe-smoke.png", '--addon', "$pwd\hello-addon.zip" -PassThru
+          if (-not $p.WaitForExit(120000)) { Stop-Process $p; throw "exe smoke timed out" }
+          if ($p.ExitCode -ne 0) { throw "exe smoke exit code $($p.ExitCode)" }
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc /Q "/DAppVersion=$env:VERSION" installer\wxwx-toolkit.iss
+          if ($LASTEXITCODE) { throw "ISCC failed" }
+          Compress-Archive dist/wxwx-toolkit "dist/wxwx-toolkit-$env:VERSION-portable.zip"
+          Get-ChildItem dist -File | ForEach-Object { "{0}  {1:N1} MB" -f $_.Name, ($_.Length / 1MB) }
+
+      - name: Test install -> reinstall (update) -> uninstall
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $v = $env:VERSION
+          $dir = "C:\wxtest"
+          $silent = '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          function Run-Wait($file, $argList) {
+            $p = Start-Process $file -ArgumentList $argList -PassThru
+            if (-not $p.WaitForExit(300000)) { throw "$file timed out" }
+            if ($p.ExitCode -ne 0) { throw "$file exit code $($p.ExitCode)" }
+          }
+          Run-Wait "dist/wxwx-toolkit-setup-$v.exe" ($silent + "/DIR=$dir")
+          if (-not (Test-Path "$dir\wxwx-toolkit.exe")) { throw "setup: exe missing" }
+          Start-Sleep 4
+          if (-not (Get-Process wxwx-toolkit -ErrorAction SilentlyContinue)) { throw "app was not started after silent setup" }
+          New-Item "$dir\_internal\stale-from-old-version.dll" -ItemType File | Out-Null
+          Run-Wait "dist/wxwx-toolkit-setup-$v.exe" ($silent + '/CLOSEAPPLICATIONS')
+          if (Test-Path "$dir\_internal\stale-from-old-version.dll") { throw "stale file survived the update" }
+          Start-Sleep 4
+          if (-not (Get-Process wxwx-toolkit -ErrorAction SilentlyContinue)) { throw "app was not restarted after update" }
+          Get-Process wxwx-toolkit -ErrorAction SilentlyContinue | Stop-Process -Force
+          Run-Wait "$dir\unins000.exe" $silent
+          Start-Sleep 5
+          if (Test-Path "$dir\wxwx-toolkit.exe") { throw "uninstall left the exe" }
+          "install / update / uninstall OK"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wxwx-toolkit-${{ env.VERSION }}
+          path: |
+            dist/wxwx-toolkit-setup-*.exe
+            dist/wxwx-toolkit-*-portable.zip
+
+      - name: Release (tag v* or manual run with "release")
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: wxwx toolkit ${{ env.VERSION }}
+          generate_release_notes: true
+          files: |
+            dist/wxwx-toolkit-setup-*.exe
+            dist/wxwx-toolkit-*-portable.zip
