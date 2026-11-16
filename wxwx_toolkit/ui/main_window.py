@@ -640,13 +640,16 @@ class MainWindow(FramelessMainWindow):
 
             def wtp():
                 import tempfile
+                aid = next(reversed(self.installed)) if self.installed else "hello"
                 f = Path(tempfile.gettempdir()) / "smoke-preset.wtp"
-                presets.write(f, presets.make("hello", "Smoke preset", {"x": 1}, "Hello", "1.0.0", "ci"))
+                presets.write(f, presets.make(aid, "Smoke preset", {"x": 1}, aid, "1.0.0", "ci"))
                 if not self.open_wtp(str(f)):
                     self.smoke_errors.append("open_wtp failed")
             steps += [add, wtp, snap("_addon")]
         steps += [lambda: self.go("settings"), lambda: self.set_lang("en"), snap("_settings_en"),
                   lambda: self.go("store"), self.on_theme, snap("_light")]
+        if addon_zip:
+            steps += [lambda: self.go(next(reversed(self.installed))), snap("_addon_en_light")]
 
         def run():
             if not steps:
