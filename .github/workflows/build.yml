@@ -2,7 +2,7 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: [main, clips]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
@@ -83,6 +83,8 @@ jobs:
         run: |
           $ff = python -c "import os; from wxwx_toolkit.core import components as c; print(os.path.dirname(c.COMPONENTS['ffmpeg'].exe()))"
           $env:PATH = "$ff;$env:PATH"
+          $env:WX_UI_SMOKE = "1"
+          $env:WX_SHOTS = "$pwd"
           foreach ($d in Get-ChildItem addons -Directory) {
             if (Test-Path "$($d.FullName)\tests") {
               Push-Location $d.FullName

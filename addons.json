@@ -3,14 +3,36 @@
     {
       "id": "compress",
       "repo": "ddam1k/wxwx-toolkit",
-      "name": {"ru": "Видео", "en": "Video"},
+      "name": {
+        "ru": "Видео",
+        "en": "Video"
+      },
       "description": {
         "ru": "MP4, WebM, GIF · CPU или NVENC · пресеты, которыми можно делиться",
         "en": "MP4, WebM, GIF · CPU or NVENC · shareable presets"
       },
       "icon": "video",
-      "needs": ["ffmpeg"],
+      "needs": [
+        "ffmpeg"
+      ],
       "min_toolkit": "1.1.0"
+    },
+    {
+      "id": "clips",
+      "repo": "ddam1k/wxwx-toolkit",
+      "name": {
+        "ru": "Клипы",
+        "en": "Clips"
+      },
+      "description": {
+        "ru": "Нарезка записей из игр: отрезок или сегменты, звук игры и микрофона, сжатие пресетом из «Видео»",
+        "en": "Cut game recordings: one piece or segments, game and mic audio, compress with a Video preset"
+      },
+      "icon": "clips",
+      "needs": [
+        "ffmpeg"
+      ],
+      "min_toolkit": "1.2.0"
     }
   ]
 }

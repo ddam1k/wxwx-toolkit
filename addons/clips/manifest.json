@@ -1,0 +1,14 @@
+{
+  "id": "clips",
+  "version": "1.0.0",
+  "entry": "wx_clips.addon:create",
+  "settings": "wx_clips.addon:settings",
+  "name": {"ru": "Клипы", "en": "Clips"},
+  "description": {
+    "ru": "Нарезка записей из игр: отрезок или сегменты, звук игры и микрофона, сжатие пресетом из «Видео»",
+    "en": "Cut game recordings: one piece or segments, game and mic audio, compress with a Video preset"
+  },
+  "icon": "clips",
+  "needs": ["ffmpeg"],
+  "min_toolkit": "1.2.0"
+}
