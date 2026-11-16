@@ -11,6 +11,10 @@ on:
         description: "Publish a release v<__version__> from this commit"
         type: boolean
         default: false
+      refresh:
+        description: "Re-upload installer + notes to the EXISTING release of this version"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -40,11 +44,28 @@ jobs:
           if ($env:GITHUB_REF -like 'refs/tags/v*' -and $env:GITHUB_REF_NAME -ne "v$v") {
             throw "tag $env:GITHUB_REF_NAME does not match __version__ $v"
           }
-          if ("${{ inputs.release }}" -eq "true") {
+          if ("${{ inputs.release }}" -eq "true" -and "${{ inputs.refresh }}" -ne "true") {
             gh release view "v$v" -R "${{ github.repository }}" 2>$null
             if ($LASTEXITCODE -eq 0) { throw "release v$v already exists - bump __version__ first" }
             $global:LASTEXITCODE = 0
           }
+
+      - name: Release notes from CHANGELOG.md
+        shell: pwsh
+        run: |
+          $lines = Get-Content CHANGELOG.md -Encoding utf8
+          $out = @(); $on = $false
+          foreach ($l in $lines) {
+            if ($l -match '^## ') { if ($on) { break }; $on = ($l -match "^## v?$([regex]::Escape($env:VERSION))\b") ; continue }
+            if ($on) { $out += $l }
+          }
+          if (-not ($out -join '').Trim()) {
+            if ("${{ inputs.release }}" -eq "true" -or $env:GITHUB_REF -like 'refs/tags/v*') { throw "CHANGELOG.md has no section '## $env:VERSION'" }
+            $out = @("wxwx toolkit $env:VERSION")
+          }
+          $out += "", "**Download:** ``wxwx-toolkit-setup.exe`` (installer) or the portable zip below."
+          Set-Content release-notes.md ($out -join "`n") -Encoding utf8
+          Get-Content release-notes.md
 
       - name: Unit tests
         run: python -m unittest discover -s tests -v
@@ -91,6 +112,7 @@ jobs:
           & $iscc /Q "/DAppVersion=$env:VERSION" installer\wxwx-toolkit.iss
           if ($LASTEXITCODE) { throw "ISCC failed" }
           Compress-Archive dist/wxwx-toolkit "dist/wxwx-toolkit-$env:VERSION-portable.zip"
+          Copy-Item "dist/wxwx-toolkit-setup-$env:VERSION.exe" dist/wxwx-toolkit-setup.exe
           Get-ChildItem dist -File | ForEach-Object { "{0}  {1:N1} MB" -f $_.Name, ($_.Length / 1MB) }
 
       - name: Test install -> reinstall (update) -> uninstall
@@ -134,7 +156,9 @@ jobs:
           tag_name: v${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
           name: wxwx toolkit ${{ env.VERSION }}
-          generate_release_notes: true
+          body_path: release-notes.md
+          overwrite_files: true
           files: |
             dist/wxwx-toolkit-setup-*.exe
+            dist/wxwx-toolkit-setup.exe
             dist/wxwx-toolkit-*-portable.zip

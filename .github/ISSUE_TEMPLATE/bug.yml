@@ -1,0 +1,33 @@
+name: 🐞 Bug / Баг
+description: Something doesn't work / Что-то не работает
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / Что случилось?
+      description: What did you do and what went wrong? / Что делал(а) и что пошло не так?
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Error text / Текст ошибки
+      description: If an add-on shows an error page, press "Copy" and paste it here. / Если аддон показал страницу ошибки — нажми «Скопировать» и вставь сюда.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version / Версия
+      description: Bottom of the left menu, e.g. "wxwx toolkit 1.0.1" / Внизу левого меню
+    validations:
+      required: true
+  - type: input
+    id: addon
+    attributes:
+      label: Add-on and its version (if it's about an add-on) / Аддон и его версия
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version / Версия Windows
+      placeholder: Windows 11 23H2

@@ -1,0 +1,14 @@
+name: ✨ Idea / Идея
+description: A new tool, add-on or improvement / Новый инструмент, аддон или улучшение
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like? / Что хочется?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why / what for? / Зачем?
