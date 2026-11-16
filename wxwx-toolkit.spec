@@ -9,7 +9,8 @@ a = Analysis(
     binaries=[],
     datas=[],
     hiddenimports=[
-        "PySide6.QtSvg", "PySide6.QtNetwork", "PySide6.QtConcurrent",
+        "PySide6.QtSvg", "PySide6.QtNetwork", "PySide6.QtConcurrent", "PySide6.QtXml",
+        "qframelesswindow", "qframelesswindow.windows", "win32gui", "win32api", "win32con",
         "json", "zipfile", "sqlite3", "csv", "hashlib", "urllib.request", "urllib.parse",
         "concurrent.futures", "subprocess", "shutil", "tempfile", "uuid", "dataclasses",
     ],

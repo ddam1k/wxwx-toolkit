@@ -8,9 +8,10 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 
 from PySide6.QtCore import QObject, QPointF, QSettings, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QColor, QDesktopServices
-from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
-                               QPushButton, QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton,
+                               QStackedWidget, QVBoxLayout, QWidget)
+from qframelesswindow import FramelessMainWindow
 
 from .. import APP_NAME, __version__
 from ..core import addons, components, i18n, updater
@@ -21,8 +22,9 @@ from .host import Host
 from .pages import CardModel, ErrorPage, SettingsPage, StorePage
 from .shell import NavButton, Sidebar
 from .theme import stylesheet, theme
+from .titlebar import HEIGHT as HEADER_H, HeaderBar
 from .update_bar import UpdateBar
-from .widgets import Logo, RevealOverlay, ThemeToggle, Toast
+from .widgets import RevealOverlay, Toast
 
 OPTION_DEFAULTS = {"au_addons": True, "au_new": False, "au_ask": True}
 
@@ -46,7 +48,7 @@ def _label(text: str, name: str) -> QLabel:
     return lb
 
 
-class MainWindow(QMainWindow):
+class MainWindow(FramelessMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(APP_NAME)
@@ -119,26 +121,12 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = QWidget()
-        header.setObjectName("header")
-        header.setFixedHeight(54)
-        hl = QHBoxLayout(header)
-        hl.setContentsMargins(18, 0, 16, 0)
-        hl.setSpacing(11)
-        self.logo = Logo(28)
-        hl.addWidget(self.logo)
-        tl = QVBoxLayout()
-        tl.setSpacing(0)
-        tl.addStretch()
-        tl.addWidget(_label(APP_NAME, "appTitle"))
-        tl.addWidget(_label("by yuyu", "appBy"))
-        tl.addStretch()
-        hl.addLayout(tl)
-        hl.addStretch()
-        self.toggle = ThemeToggle()
+        # one combined title bar (drawn by us, overlays the top of the window)
+        self.header = HeaderBar(self, APP_NAME)
+        self.setTitleBar(self.header)
+        self.toggle = self.header.toggle
         self.toggle.clicked.connect(self.on_theme)
-        hl.addWidget(self.toggle)
-        root.addWidget(header)
+        root.addSpacing(HEADER_H)
 
         self.update_bar = UpdateBar()
         self.update_bar.update_clicked.connect(self.install_update)
@@ -205,6 +193,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.settings_page)
 
         self.toast = Toast(central)
+        self.titleBar.raise_()
 
     # ======================================================== helpers for pages
     def tint_hex(self) -> str:
@@ -483,42 +472,22 @@ class MainWindow(QMainWindow):
             h.lang_changed.emit(i18n.lang())
 
     def on_theme(self):
-        snap = self.central.grab()
-        center = QPointF(self.toggle.mapTo(self.central, self.toggle.rect().center()))
+        snap = self.grab()
+        center = QPointF(self.toggle.mapTo(self, self.toggle.rect().center()))
         theme.name = "light" if theme.dark else "dark"
         self.toggle.set_light(not theme.dark)
         self.apply_theme()
         self.store_page.refresh()
-        RevealOverlay(self.central, snap, center)
+        RevealOverlay(self, snap, center)
         self.store.setValue("theme", theme.name)
         for h in self.hosts.values():
             h.theme_changed.emit(theme.name)
 
     def apply_theme(self):
         QApplication.instance().setStyleSheet(stylesheet())
-        for w in self.central.findChildren(QWidget):
+        self.header.apply_theme()
+        for w in self.findChildren(QWidget):
             w.update()
-        self._style_titlebar()
-
-    def _style_titlebar(self):
-        if sys.platform != "win32":
-            return
-        try:
-            import ctypes
-            hwnd = ctypes.c_void_p(int(self.winId()))
-            dwm = ctypes.windll.dwmapi
-            dark = ctypes.c_int(1 if theme.dark else 0)
-            dwm.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(dark), ctypes.sizeof(dark))
-            for attr, key in ((35, "win"), (36, "text")):
-                col = QColor(theme.p[key])
-                ref = ctypes.c_uint(col.red() | col.green() << 8 | col.blue() << 16)
-                dwm.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(ref), ctypes.sizeof(ref))
-        except Exception:
-            pass
-
-    def showEvent(self, e):
-        super().showEvent(e)
-        self._style_titlebar()
 
     # ======================================================== toolkit self-update
     def check_updates(self, manual: bool):
