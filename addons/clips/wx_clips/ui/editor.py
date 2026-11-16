@@ -1468,12 +1468,12 @@ class EditorView(QWidget):
                 if c.status in ("queued", "work"):
                     c.status, c.progress = "", 0.0
         else:
+            self.ctx.mark_done([c.path for c in self.ctx.clips if c.status == "done"])
             mb = sum(os.path.getsize(p) for p in self._done_out if os.path.exists(p)) / 1048576
             if self._errors:
                 self.toast(t("done_errors", n=self._errors))
             else:
                 self.toast(t("done", f=files_n(len(self._done_out)), a=fmt_mb(self._mb_in), b=fmt_mb(mb)))
-            self.ctx.mark_done([c.path for c in self.ctx.clips if c.status == "done"])
         self.render_step2_totals()
         for w in self._strip_cards:
             w.update()
