@@ -111,7 +111,17 @@ class ClipsPage(QWidget):
 
     def trash_originals(self, paths: list[str]) -> int:
         from ..core.trash import send_to_trash
-        n = sum(1 for p in paths if send_to_trash(p))
+        import time as _t
+        n = 0
+        for p in paths:
+            ok = False
+            for _ in range(5):                   # the player / probes may hold the file for a moment
+                ok = send_to_trash(p)
+                if ok or not os.path.exists(p):
+                    break
+                _t.sleep(0.2)
+            n += ok
+            print("trash", ok, p)
         if n:
             self._sig = None
             self.rescan()

@@ -116,6 +116,11 @@ class Player(QObject):
                     self.finished_ranges.emit()
         self.position.emit(self.t)
 
+    def release(self):
+        self.mp.stop()
+        self.mp.setSource(QUrl())
+        self.path = ""
+
     def shutdown(self):
         self._timer.stop()
         self.mp.stop()

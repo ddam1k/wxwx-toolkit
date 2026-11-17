@@ -1537,6 +1537,7 @@ class EditorView(QWidget):
             done = [c.path for c in self.ctx.clips if c.status == "done"]
             self.ctx.mark_done(done)
             if self.ctx.del_orig and done:
+                self.player.release()            # Windows won't move a file that is open in the player
                 n = self.ctx.trash_originals(done)
                 if n:
                     QTimer.singleShot(2600, lambda: self.toast(t("trashed", n=n)))
