@@ -577,6 +577,7 @@ class EditorView(QWidget):
         self.strip_area.setWidgetResizable(True)
         self.strip_area.setFixedHeight(126)
         self.strip_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.strip_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)   # the wheel scrolls it
         self.strip_area.setObjectName("strip")
         lv.addWidget(self.strip_area)
         self.view = PlayerView()

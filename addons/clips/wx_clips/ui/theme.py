@@ -146,6 +146,8 @@ QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: 
 QScrollBar:vertical { background: transparent; width: 8px; margin: 2px; }
 QScrollBar::handle:vertical { background: $panel3; border-radius: 3px; min-height: 30px; }
 QScrollBar::handle:vertical:hover { background: $faint; }
+QScrollBar:horizontal { background: transparent; height: 8px; margin: 2px; }
+QScrollBar::handle:horizontal { background: $panel3; border-radius: 3px; min-width: 30px; }
 QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::sub-page { height: 0; background: none; }
 
 QMenu { background: $panel; border: 1px solid $line2; border-radius: 10px; padding: 5px; }
