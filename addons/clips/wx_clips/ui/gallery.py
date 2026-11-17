@@ -29,11 +29,14 @@ class ClipCard(QWidget):
         self._h = 0.0
         self._scrub = -1.0
         self._in = 0.0
-        QTimer.singleShot(delay, lambda: animate(self, 0, 1, 420, self._set_in))
+        QTimer.singleShot(delay, self._start_in)
 
     def _set_in(self, v):
         self._in = float(v)
         self.update()
+
+    def _start_in(self):
+        animate(self, 0, 1, 400, self._set_in)
 
     def _set_h(self, v):
         self._h = float(v)
@@ -185,11 +188,14 @@ class FolderRow(QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._h = 0.0
         self._in = 0.0
-        QTimer.singleShot(delay, lambda: animate(self, 0, 1, 380, self._set_in))
+        QTimer.singleShot(delay, self._start_in)
 
     def _set_in(self, v):
         self._in = float(v)
         self.update()
+
+    def _start_in(self):
+        animate(self, 0, 1, 400, self._set_in)
 
     def _set_h(self, v):
         self._h = float(v)
