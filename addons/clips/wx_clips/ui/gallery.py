@@ -7,9 +7,9 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QScrollArea, QSizePolicy, QV
 
 from ..core.i18n import clips_n, fmt_mb, pl, t
 from ..core.library import ClipFile, GameFolder
-from .common import TabRow, badge, button, draw_cover, label, pixmap, rounded, short, text_w, when
+from .common import SmoothScroll, TabRow, badge, button, draw_cover, fade_change, label, pixmap, rounded, short, text_w, when
 from .theme import HAIR_BLACK, HAIR_WHITE, font, theme
-from .widgets import DropZone, FlowLayout, Segmented, animate, icon_pixmap, mix
+from .widgets import DropZone, FlowLayout, Segmented, Switch, animate, icon_pixmap, mix
 
 CARD_W = 214
 THUMB_H = round(CARD_W * 9 / 16)
@@ -218,11 +218,22 @@ class FolderRow(QWidget):
         p.drawRoundedRect(QRectF(self.rect()), 12, 12)
         rects = col_rects(self.width(), self.height())
         cov = QRectF(rects[0].x(), 8, 62, 36)
-        back = cov.translated(4 + 2 * self._h, -3 - 2 * self._h)
-        p.setBrush(theme.c("panel3"))
-        p.drawRoundedRect(back, 7, 7)
-        first = f.clips[0].path if f.clips else None
-        draw_cover(p, cov.translated(-2 * self._h, self._h), pixmap(self.ctx.thumb(first)) if first else None, 7)
+        if self.ctx.folder_previews:
+            back = cov.translated(4 + 2 * self._h, -3 - 2 * self._h)
+            p.setBrush(theme.c("panel3"))
+            p.drawRoundedRect(back, 7, 7)
+            first = f.clips[0].path if f.clips else None
+            draw_cover(p, cov.translated(-2 * self._h, self._h), pixmap(self.ctx.thumb(first)) if first else None, 7)
+        else:
+            tile = QRectF(cov.center().x() - 18, cov.center().y() - 18, 36, 36)
+            p.setBrush(mix(theme.c("panel2"), theme.c("panel3"), self._h))
+            p.drawRoundedRect(tile, 10, 10)
+            p.save()
+            p.translate(tile.center())
+            p.rotate(-6 * self._h)
+            p.drawPixmap(QPointF(-10, -10), icon_pixmap("folder", mix(theme.c("muted"), theme.c("tint"), self._h), 20,
+                                                        self.devicePixelRatioF()))
+            p.restore()
         # name + pills
         nr = rects[1]
         fn = font(10, QFont.Weight.Bold)
@@ -360,7 +371,7 @@ class HomeView(QWidget):
         self.in_sort = "new"
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        self.scroll = QScrollArea()
+        self.scroll = SmoothScroll()
         self.scroll.setWidgetResizable(True)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         outer.addWidget(self.scroll)
@@ -536,8 +547,16 @@ class HomeView(QWidget):
         games = [f for f in ctx.folders if not f.root]
         w = t("folders_w")
         fw = pl(len(games), *w, "folder", "folders") if True else ""
-        col.addWidget(label(t("folders_sum", f=fw, c=clips_n(sum(f.count for f in ctx.folders)),
+        top = QHBoxLayout()
+        top.addWidget(label(t("folders_sum", f=fw, c=clips_n(sum(f.count for f in ctx.folders)),
                               size=fmt_mb(sum(f.size for f in ctx.folders) / 1048576)), "hint"))
+        top.addStretch()
+        top.addWidget(label(t("folder_previews"), "hint"))
+        sw = Switch()
+        sw.set_now(ctx.folder_previews)
+        sw.toggled.connect(lambda on: QTimer.singleShot(300, lambda: ctx.set_folder_previews(on)))
+        top.addWidget(sw)
+        col.addLayout(top)
         col.addSpacing(10)
         hdr = FolderHeader(ctx)
         hdr.sort.connect(self._sort)
@@ -584,27 +603,40 @@ class HomeView(QWidget):
         self._grid(col, clips, True)
 
     # -------------------------------------------- actions
+    def _top(self) -> int:
+        try:
+            from PySide6.QtCore import QPoint
+            return self.tabs.mapTo(self.scroll.viewport(), QPoint(0, self.tabs.height())).y()
+        except (RuntimeError, AttributeError):
+            return 0
+
+    def _fade(self, dx: float, ms: int = 340):
+        fade_change(self.scroll.viewport(), self.render, ms, dx, top=self._top())
+
     def _tab(self, key):
         self.tab = key
-        self.render()
+        self._fade(-48 if key == "folders" else 48)
 
     def _up(self):
         self.folder = None
-        self.render()
+        self._fade(48)
 
     def _open_folder(self, f):
         self.folder = f
-        self.render()
-        self.scroll.verticalScrollBar().setValue(0)
+
+        def go():
+            self.render()
+            QTimer.singleShot(0, lambda: self.scroll.verticalScrollBar().setValue(0))
+        fade_change(self.scroll.viewport(), go, 340, -48, top=self._top())
 
     def _sort(self, k):
         cur, d = self.ctx.fsort
         self.ctx.fsort = (k, -d) if cur == k else (k, 1 if k == "name" else -1)
-        self.render()
+        self._fade(0, 240)
 
     def _in_sort(self, v):
         self.in_sort = v
-        self.render()
+        self._fade(0, 240)
 
     def _card_click(self, path):
         ctx = self.ctx

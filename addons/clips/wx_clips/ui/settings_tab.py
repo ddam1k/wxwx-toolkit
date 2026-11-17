@@ -78,6 +78,13 @@ class SettingsTab(QWidget):
         sw.toggled.connect(lambda on: h.set("mark_done", on))
         self.col.addWidget(sw)
 
+        sw = SwitchRow()
+        sw.title.setText(t("s_fprev"))
+        sw.sub.setText(t("s_fprev_s"))
+        sw.switch.set_now(bool(h.get("folder_previews", False)))
+        sw.toggled.connect(lambda on: h.set("folder_previews", on))
+        self.col.addWidget(sw)
+
         self._section(t("s_cut"))
         seg = Segmented([("single", t("mode_single"), t("mode_single_s")), ("multi", t("mode_multi"), t("mode_multi_s"))])
         seg.set_value(h.get("def_mode", "single") or "single", animated=False)

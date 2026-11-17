@@ -5,9 +5,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
-from PySide6.QtCore import QObject, QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QEasingCurve, QObject, QPointF, QRectF, QSize, Qt, QVariantAnimation, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPixmap
-from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QLabel, QPushButton, QScrollArea, QWidget
 
 from ..core.i18n import t
 from .theme import font, theme
@@ -355,3 +355,68 @@ class IconButton(QAbstractButton):
             col = theme.c("tint") if self.active else mix(theme.c("faint"), theme.c("text"), self._h)
         o = QPointF((r.width() - self.icon_size) / 2, (r.height() - self.icon_size) / 2)
         p.drawPixmap(o, icon_pixmap(self.icon, col, self.icon_size, self.devicePixelRatioF()))
+
+
+# ---------------------------------------------------------------- smooth wheel scrolling
+class SmoothScroll(QScrollArea):
+    """Mouse wheel glides instead of jumping (touchpads keep their native pixel scrolling)."""
+
+    def __init__(self, horizontal: bool = False, parent=None):
+        super().__init__(parent)
+        self.horizontal = horizontal
+        self._anim = None
+        self._target = 0.0
+
+    def bar(self):
+        return self.horizontalScrollBar() if self.horizontal else self.verticalScrollBar()
+
+    def wheelEvent(self, e):
+        if not e.pixelDelta().isNull():
+            return super().wheelEvent(e)
+        d = e.angleDelta().y() or e.angleDelta().x()
+        if not d:
+            return super().wheelEvent(e)
+        bar = self.bar()
+        running = self._anim is not None and self._anim.state() == QVariantAnimation.State.Running
+        start = float(bar.value())
+        base = self._target if running else start
+        self._target = max(float(bar.minimum()), min(float(bar.maximum()), base - d * 1.1))
+        if self._anim is not None:
+            self._anim.stop()
+        self._anim = animate(self, start, self._target, 380, lambda v: bar.setValue(round(v)),
+                             QEasingCurve.Type.OutCubic)
+        e.accept()
+
+
+# ---------------------------------------------------------------- cross-fade between two states of a widget
+class _Ghost(QWidget):
+    def __init__(self, parent: QWidget, pm: QPixmap, dx: float, dy: float, top: int = 0):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.pm, self.dx, self.dy, self.k, self.top = pm, dx, dy, 1.0, top
+        self.setGeometry(parent.rect().adjusted(0, top, 0, 0))
+        self.show()
+        self.raise_()
+
+    def set_k(self, v):
+        self.k = float(v)
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setOpacity(self.k)
+        p.translate(self.dx * (1 - self.k), self.dy * (1 - self.k))
+        dpr = self.pm.devicePixelRatio()
+        p.drawPixmap(QPointF(0, 0), self.pm, QRectF(0, self.top * dpr, self.pm.width(), self.pm.height() - self.top * dpr))
+
+
+def fade_change(w: QWidget, change, ms: int = 320, dx: float = 0, dy: float = 0, top: int = 0):
+    """Snapshot w, apply change(), then let the snapshot fade (and drift by dx/dy) away over the new state.
+    Only the part below `top` px is faded (headers above it stay put)."""
+    if not w.isVisible() or w.width() < 4:
+        change()
+        return
+    pm = w.grab()
+    change()
+    g = _Ghost(w, pm, dx, dy, max(0, top))
+    animate(g, 1, 0, ms, g.set_k, QEasingCurve.Type.OutCubic, on_done=g.deleteLater)

@@ -5,9 +5,10 @@ import os
 import tempfile
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QEasingCurve, QEvent, QPointF, QRectF, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import (QAbstractButton, QFileDialog, QFrame, QHBoxLayout, QLineEdit, QScrollArea,
+from PySide6.QtWidgets import (QAbstractButton, QFileDialog, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLineEdit,
+                               QScrollArea,
                                QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 
 from ..core import encode
@@ -16,7 +17,8 @@ from ..core.i18n import clips_n, files_n, fmt_mb, segs_n, t
 from ..core.runner import ClipJob
 from ..core.session import Clip
 from ..core.settings import GPU_ENCODERS, EncodeSettings
-from .common import SEGC, IconButton, badge, button, draw_cover, label, parse_t, pixmap, short, tcode, text_w, when
+from .common import (SEGC, IconButton, SmoothScroll, badge, button, draw_cover, fade_change, label, parse_t, pixmap, short,
+                     tcode, text_w, when)
 from .player import Player, PlayerView
 from .theme import font, theme
 from .timeline import Timeline
@@ -564,7 +566,7 @@ class EditorView(QWidget):
         head.addWidget(self.b_gallery, 0, Qt.AlignmentFlag.AlignBottom)
         head.addWidget(self.b_clear, 0, Qt.AlignmentFlag.AlignBottom)
         lv.addLayout(head)
-        self.strip_area = QScrollArea()
+        self.strip_area = SmoothScroll(horizontal=True)
         self.strip_area.setWidgetResizable(True)
         self.strip_area.setFixedHeight(126)
         self.strip_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -604,7 +606,8 @@ class EditorView(QWidget):
         self.timeline.cut_done.connect(self.changed)
         self.timeline.play_seg.connect(lambda i: self.play_cut(i))
         self.timeline.select_seg.connect(self._select_seg)
-        self.timeline.scrubbing.connect(lambda on: (self.player.pause(), self.player.stop_ranges(), self._set_playing_label("")) if on else None)
+        self.timeline.scrubbing.connect(self._scrub_start)
+        self.timeline.released.connect(self._scrub_end)
         lv.addWidget(self.timeline)
         self.hint = label("", "hint")
         self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -649,7 +652,7 @@ class EditorView(QWidget):
         v = QVBoxLayout(page)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
-        sc = QScrollArea()
+        sc = SmoothScroll()
         sc.setWidgetResizable(True)
         sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         body = QWidget()
@@ -820,7 +823,7 @@ class EditorView(QWidget):
     def toast(self, text: str):
         self.ctx.toast(text)
 
-    def load_current(self, at: float | None = None):
+    def load_current(self, at: float | None = None, strip: bool = True):
         c = self.clip
         self.player.pause()
         self.player.stop_ranges()
@@ -835,11 +838,16 @@ class EditorView(QWidget):
             start = at if at is not None else (c.segs()[0].a if c.segs() else 0.0)
             self.player.load(c.path, c.dur, start)
         self.timeline.set_clip(c)
-        self.render()
+        self.timeline.intro()
+        self.render(strip)
         self.setFocus()
 
-    def render(self):
-        self.render_strip()
+    def render(self, strip: bool = True):
+        if strip:
+            self.render_strip()
+        else:
+            for w in self._strip_cards:
+                w.update()
         self.render_side()
         self.render_totals()
         self.timeline.update()
@@ -881,7 +889,7 @@ class EditorView(QWidget):
         if i == self.ctx.cur:
             return
         self.ctx.cur = i
-        self.load_current()
+        fade_change(self.view, lambda: self.load_current(strip=False), 300)
         if 0 <= i < len(self._strip_cards):
             QTimer.singleShot(50, lambda: self.strip_area.ensureWidgetVisible(self._strip_cards[i], 40, 0))
 
@@ -935,6 +943,35 @@ class EditorView(QWidget):
         self.b_loop.update()
         self.view.loop = self.player.loop
         self.view.update()
+
+    def _scrub_start(self, on: bool):
+        if on:
+            self._was_playing = self.player.playing
+            self.player.pause()
+            self.player.stop_ranges()
+            self._set_playing_label("")
+
+    def _scrub_end(self, kind: str):
+        c = self.clip
+        if kind in ("a", "b") and c and c.single:
+            # after moving a handle: listen to the edge you just set
+            self.player.seek(c.single.a if kind == "a" else max(c.single.a, c.single.b - 2.5))
+            self.player.play()
+        elif getattr(self, "_was_playing", False):
+            self.player.play()
+        self._was_playing = False
+
+    def enter(self):
+        """Entrance: strip cards rise one by one (they animate themselves), panel blocks fade in, timeline unrolls."""
+        page = self.pages.currentWidget()
+        blocks = [w for w in page.findChildren(QWidget, "block") if w.isVisible()]
+        for i, b in enumerate(blocks):
+            eff = QGraphicsOpacityEffect(b)
+            eff.setOpacity(0)
+            b.setGraphicsEffect(eff)
+            QTimer.singleShot(80 + i * 70, lambda e=eff, w=b: animate(w, 0, 1, 380, e.setOpacity,
+                                                                    on_done=lambda w=w: w.setGraphicsEffect(None)))
+        self.timeline.intro()
 
     def _scrub(self, s: float):
         self.player.seek(s)
@@ -1066,8 +1103,7 @@ class EditorView(QWidget):
         c = self.clip
         if not c or not c.info or c.mode == m:
             return
-        c.set_mode(m)
-        self.changed()
+        fade_change(self.pages.currentWidget(), lambda: (c.set_mode(m), self.changed()), 300, 0, -14, top=150)
         if m == "multi" and not c.multi:
             self.toast(t("multi_tip"))
 
@@ -1203,8 +1239,16 @@ class EditorView(QWidget):
         self._seg_rows = []
         if not c or c.mode != "multi":
             return
+        known = getattr(self, "_known_segs", set())
+        fresh = [s for s in c.multi if id(s) not in known]
+        self._known_segs = {id(s) for s in c.multi}
         for i in range(len(c.multi)):
             row = SegRow(self.ctx, c, i)
+            if c.multi[i] in fresh and len(fresh) < len(c.multi) + 1 and known:
+                eff = QGraphicsOpacityEffect(row)
+                row.setGraphicsEffect(eff)
+                animate(row, 0, 1, 380, eff.setOpacity, on_done=lambda r=row: r.setGraphicsEffect(None))
+                self.timeline.pulse(c.multi[i])
             row.play.connect(lambda i: self.play_cut(i))
             row.pick.connect(self._pick_seg)
             row.edit.connect(self._toggle_edit)
@@ -1245,14 +1289,17 @@ class EditorView(QWidget):
             self.render_step2_totals()
 
     # ------------------------------------------------ step 2
-    def go_step(self, n: int):
+    def go_step(self, n: int, animated: bool = True):
         if self.running:
             return
         self.step = n
-        self.pages.setCurrentIndex(n - 1)
-        w = self.pages.currentWidget()
-        w.move(40 if n == 2 else -40, 0)
-        animate(w, 40 if n == 2 else -40, 0, 420, lambda v: w.move(int(v), 0))
+        if animated and self.pages.isVisible():
+            fade_change(self.pages, lambda: self.pages.setCurrentIndex(n - 1), 360, -60 if n == 2 else 60)
+            w = self.pages.currentWidget()
+            w.move(46 if n == 2 else -46, 0)
+            animate(w, 46 if n == 2 else -46, 0, 460, lambda v: w.move(int(v), 0), QEasingCurve.Type.OutCubic)
+        else:
+            self.pages.setCurrentIndex(n - 1)
         self.st1.state = "on" if n == 1 else "done"
         self.st2.state = "on" if n == 2 else "todo"
         self.st1.update()

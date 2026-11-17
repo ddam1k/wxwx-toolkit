@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QWidget
 from ..core.session import Clip
 from .common import SEGC, pixmap, short, tcode, text_w
 from .theme import HAIR_BLACK, HAIR_WHITE, font, theme
+from .widgets import animate
 
 PAD = 20          # room for the handles of the single cut
 TOP, STRIP_H = 40, 50
@@ -21,6 +22,7 @@ class Timeline(QWidget):
     play_seg = Signal(int)
     select_seg = Signal(int)
     scrubbing = Signal(bool)
+    released = Signal(str)          # what was dragged: a | b | seek
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -33,6 +35,24 @@ class Timeline(QWidget):
         self._drag: str | None = None        # a | b | seek
         self._tags: list[tuple[QRectF, int]] = []
         self._tip: tuple[float, str] | None = None
+        self._intro = 1.0
+        self._pulse: dict[int, float] = {}
+
+    def intro(self):
+        self._intro = 0.0
+        animate(self, 0, 1, 620, self._set_intro)
+
+    def _set_intro(self, v):
+        self._intro = float(v)
+        self.update()
+
+    def pulse(self, seg):
+        key = id(seg)
+
+        def step(v, k=key):
+            self._pulse[k] = float(v)
+            self.update()
+        animate(self, 1, 0, 900, step)
 
     # ------------------------------------------------ geometry
     def track(self) -> QRectF:
@@ -124,10 +144,12 @@ class Timeline(QWidget):
         self.cut_changed.emit()
 
     def mouseReleaseEvent(self, e):
-        if self._drag in ("a", "b"):
+        kind = self._drag
+        if kind in ("a", "b"):
             self.cut_done.emit()
-        if self._drag:
+        if kind:
             self.scrubbing.emit(False)
+            self.released.emit(kind)
         self._drag = None
         self._tip = None
         self.update()
@@ -144,6 +166,11 @@ class Timeline(QWidget):
         r = self.track()
         clip_path = QPainterPath()
         clip_path.addRoundedRect(r, 9, 9)
+        if self._intro < 1:                       # the strip unrolls from the left
+            from PySide6.QtCore import QRectF as _R
+            reveal = QPainterPath()
+            reveal.addRect(_R(r.left(), r.top() - 30, r.width() * self._intro, r.height() + 60))
+            clip_path = clip_path.intersected(reveal)
         p.save()
         p.setClipPath(clip_path)
         p.fillRect(r, QColor("#000"))
@@ -178,6 +205,7 @@ class Timeline(QWidget):
         p.restore()
         self._tags = []
         if c and c.dur:
+            p.setOpacity(self._intro)
             if c.mode == "single" and c.single:
                 self._paint_single(p, c, r)
             else:
@@ -194,6 +222,7 @@ class Timeline(QWidget):
                 p.setPen(QColor("#141416"))
                 p.setFont(f)
                 p.drawText(br, Qt.AlignmentFlag.AlignCenter, txt)
+            p.setOpacity(1)
             if c.mode == "multi" and not c.multi and c.pend is None:
                 p.setPen(QColor(255, 255, 255, 230))
                 p.setFont(font(9, QFont.Weight.Bold))
@@ -288,6 +317,15 @@ class Timeline(QWidget):
             fill = QColor(col)
             fill.setAlpha(26)
             seg_r = QRectF(xa, r.top() - 3, max(2.0, xb - xa), r.height() + 6)
+            pu = self._pulse.get(id(s), 0.0)
+            if pu > 0.01:
+                for k in range(4):
+                    g = QColor(col)
+                    g.setAlpha(int((70 - k * 15) * pu))
+                    p.setPen(Qt.PenStyle.NoPen)
+                    p.setBrush(g)
+                    grow = 3 + 4 * k + 10 * (1 - pu)
+                    p.drawRoundedRect(seg_r.adjusted(-grow, -grow, grow, grow), 8, 8)
             if sel or is_edit:
                 for k in range(3):
                     g = QColor(col)

@@ -141,10 +141,19 @@ class PlayerView(QWidget):
         self._flash = 0.0
         self._flash_play = True
         self._done_rect = QRectF()
+        self._alpha = 1.0
 
     def set_image(self, img: QImage):
+        first = self.img is None
         self.img = img
         self.loading = False
+        if first:
+            self._alpha = 0.0
+            animate(self, 0, 1, 320, self._set_alpha)
+        self.update()
+
+    def _set_alpha(self, v):
+        self._alpha = float(v)
         self.update()
 
     def clear(self):
@@ -179,7 +188,10 @@ class PlayerView(QWidget):
             k = min(r.width() / iw, r.height() / ih)
             w, h = iw * k, ih * k
             p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-            p.drawImage(QRectF(r.center().x() - w / 2, r.center().y() - h / 2, w, h), self.img)
+            p.setOpacity(self._alpha)
+            k2 = 0.985 + 0.015 * self._alpha
+            p.drawImage(QRectF(r.center().x() - w * k2 / 2, r.center().y() - h * k2 / 2, w * k2, h * k2), self.img)
+            p.setOpacity(1)
         elif self.loading:
             p.setPen(QColor(255, 255, 255, 120))
             p.setFont(font(9.5, QFont.Weight.DemiBold))

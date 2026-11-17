@@ -16,7 +16,7 @@ from ..core.encode import out_folder
 from ..core.i18n import fmt_mb, t
 from ..core.session import Clip
 from ..core.settings import BUILTIN_PRESETS, GPU_ENCODERS, EncodeSettings
-from .common import Loader
+from .common import Loader, fade_change
 from .common import since as since_ts
 from .editor import EditorView
 from .gallery import HomeView
@@ -91,14 +91,23 @@ class ClipsPage(QWidget):
         self.use_tk = bool(g("use_tk", True)) and hasattr(self.host, "folder")
         self.own_mode = g("own_mode", "beside") or "beside"
         self.own_dir = g("own_dir", "") or ""
+        self.folder_previews = bool(g("folder_previews", False))
 
     def _setting(self, key: str):
-        old = self.nv_dir, self.new_range, self.mark
+        old = self.nv_dir, self.new_range, self.mark, self.folder_previews
         self.read_prefs()
-        if (self.nv_dir, self.new_range, self.mark) != old:
+        if (self.nv_dir, self.new_range, self.mark) != old[:3]:
             if self.nv_dir != old[0]:
                 self.home.folder = None
+            self._sig = None
             self.rescan()
+        elif self.folder_previews != old[3]:
+            self.home.repaint_cards()
+
+    def set_folder_previews(self, on: bool):
+        self.host.set("folder_previews", on)
+        self.folder_previews = on
+        self.home.repaint_cards()
 
     # ------------------------------------------------ views
     def _make_home(self) -> HomeView:
@@ -120,14 +129,21 @@ class ClipsPage(QWidget):
 
     def show_home(self):
         self.editor.player.pause()
-        self.home.render()
-        self.stack.setCurrentWidget(self.home)
+
+        def go():
+            self.home.render()
+            self.stack.setCurrentWidget(self.home)
+        fade_change(self, go, 380, 60)
 
     def show_editor(self):
         if not self.clips:
             return
-        self.stack.setCurrentWidget(self.editor)
-        self.editor.load_current()
+
+        def go():
+            self.stack.setCurrentWidget(self.editor)
+            self.editor.load_current()
+            self.editor.enter()
+        fade_change(self, go, 380, -60)
 
     # ------------------------------------------------ library
     def rescan(self):
@@ -194,10 +210,15 @@ class ClipsPage(QWidget):
     def _loaded(self, key: str, value):
         kind, _, path = key.partition(":")
         if kind == "scan":
-            self.folders = value or []
+            folders = value or []
+            sig = tuple((f.name, f.count, f.size, f.last) for f in folders)
+            same = sig == getattr(self, "_sig", None) and self.state == "ok"
+            self._sig = sig
+            self.folders = folders
             self.state = "ok"
             self._compute_new()
-            self._refresh_home()
+            if not same:                       # nothing new on disk: don't rebuild (keeps tab switches smooth)
+                self._refresh_home()
             return
         if kind == "gpu":
             self.gpu = value if value else (False, "")
@@ -272,10 +293,14 @@ class ClipsPage(QWidget):
                 first = i
         self.picks.clear()
         self.cur = first
-        self.editor.step = 1
-        self.editor.go_step(1)
-        self.stack.setCurrentWidget(self.editor)
-        self.editor.load_current()
+
+        def go():
+            self.editor.step = 1
+            self.editor.go_step(1, animated=False)
+            self.stack.setCurrentWidget(self.editor)
+            self.editor.load_current()
+            self.editor.enter()
+        fade_change(self, go, 380, -60)
         self.toast(t("added_clips"))
 
     def pick_files(self):
@@ -445,5 +470,5 @@ class ClipsPage(QWidget):
 
     def showEvent(self, e):
         super().showEvent(e)
-        if self.state == "ok":
-            self.rescan()
+        if self.state == "ok":                 # after the toolkit's page switch has settled
+            QTimer.singleShot(700, self.rescan)

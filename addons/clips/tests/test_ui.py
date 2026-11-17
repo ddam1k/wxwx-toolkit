@@ -124,6 +124,13 @@ class ClipsUiSmoke(unittest.TestCase):
         spin(5, lambda: ed.view.img is not None)
         self.assertIsNotNone(ed.view.img, "player shows no frame")
         clip = page.clips[page.cur]
+        ed.player.play()
+        spin(0.5)
+        ed._scrub_start(True)
+        ed.player.seek(5.0)
+        ed._scrub_end("seek")
+        self.assertTrue(spin(2, lambda: ed.player.playing), "clicking the timeline must keep playing")
+        ed.player.pause()
         clip.single.a, clip.single.b = 2.0, 7.5
         ed.player.seek(4.0)
         ed.changed()
