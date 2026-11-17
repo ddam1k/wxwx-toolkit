@@ -5,7 +5,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
-from PySide6.QtCore import QEasingCurve, QObject, QPointF, QRectF, QSize, Qt, QVariantAnimation, Signal
+from PySide6.QtCore import QEasingCurve, QObject, QPointF, QRectF, QSize, Qt, QTimer, QVariantAnimation, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QLabel, QPushButton, QScrollArea, QWidget
 
@@ -192,6 +192,7 @@ def button(text: str, name: str) -> QPushButton:
     b = QPushButton(text)
     b.setObjectName(name)
     b.setCursor(Qt.CursorShape.PointingHandCursor)
+    b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     return b
 
 
@@ -364,8 +365,12 @@ class SmoothScroll(QScrollArea):
     def __init__(self, horizontal: bool = False, parent=None):
         super().__init__(parent)
         self.horizontal = horizontal
-        self._anim = None
-        self._target = 0.0
+        self._target = None
+        self._anim = QVariantAnimation(self)          # one long-lived animation, reused
+        self._anim.setDuration(380)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._anim.valueChanged.connect(lambda v: self.bar().setValue(round(float(v))))
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
     def bar(self):
         return self.horizontalScrollBar() if self.horizontal else self.verticalScrollBar()
@@ -374,17 +379,17 @@ class SmoothScroll(QScrollArea):
         if not e.pixelDelta().isNull():
             return super().wheelEvent(e)
         d = e.angleDelta().y() or e.angleDelta().x()
-        if not d:
-            return super().wheelEvent(e)
         bar = self.bar()
-        running = self._anim is not None and self._anim.state() == QVariantAnimation.State.Running
+        if not d or bar.maximum() <= bar.minimum():
+            return super().wheelEvent(e)
+        running = self._anim.state() == QVariantAnimation.State.Running
         start = float(bar.value())
-        base = self._target if running else start
+        base = self._target if (running and self._target is not None) else start
         self._target = max(float(bar.minimum()), min(float(bar.maximum()), base - d * 1.1))
-        if self._anim is not None:
-            self._anim.stop()
-        self._anim = animate(self, start, self._target, 380, lambda v: bar.setValue(round(v)),
-                             QEasingCurve.Type.OutCubic)
+        self._anim.stop()
+        self._anim.setStartValue(start)
+        self._anim.setEndValue(self._target)
+        self._anim.start()
         e.accept()
 
 
@@ -410,13 +415,31 @@ class _Ghost(QWidget):
         p.drawPixmap(QPointF(0, 0), self.pm, QRectF(0, self.top * dpr, self.pm.width(), self.pm.height() - self.top * dpr))
 
 
-def fade_change(w: QWidget, change, ms: int = 320, dx: float = 0, dy: float = 0, top: int = 0):
+def snapshot(w: QWidget, bg: QColor) -> QPixmap:
+    """Like grab(), but on our theme color — grab() fills unpainted areas with the (light) system palette."""
+    dpr = w.devicePixelRatioF()
+    pm = QPixmap(max(1, round(w.width() * dpr)), max(1, round(w.height() * dpr)))
+    pm.setDevicePixelRatio(dpr)
+    pm.fill(bg)
+    from PySide6.QtCore import QPoint
+    from PySide6.QtGui import QRegion
+    w.render(pm, QPoint(), QRegion(), QWidget.RenderFlag.DrawChildren)
+    return pm
+
+
+def fade_change(w: QWidget, change, ms: int = 320, dx: float = 0, dy: float = 0, top: int = 0, bg: str = "win"):
     """Snapshot w, apply change(), then let the snapshot fade (and drift by dx/dy) away over the new state.
     Only the part below `top` px is faded (headers above it stay put)."""
     if not w.isVisible() or w.width() < 4:
         change()
         return
-    pm = w.grab()
+    try:
+        pm = snapshot(w, theme.c(bg))
+    except Exception:
+        pm = None
     change()
+    if pm is None:
+        return
     g = _Ghost(w, pm, dx, dy, max(0, top))
     animate(g, 1, 0, ms, g.set_k, QEasingCurve.Type.OutCubic, on_done=g.deleteLater)
+    QTimer.singleShot(ms + 400, g.deleteLater)          # never leave a ghost behind

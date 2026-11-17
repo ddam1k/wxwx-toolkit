@@ -92,6 +92,7 @@ class ClipsPage(QWidget):
         self.own_mode = g("own_mode", "beside") or "beside"
         self.own_dir = g("own_dir", "") or ""
         self.folder_previews = bool(g("folder_previews", False))
+        self.del_orig = bool(g("del_orig", False))
 
     def _setting(self, key: str):
         old = self.nv_dir, self.new_range, self.mark, self.folder_previews
@@ -103,6 +104,18 @@ class ClipsPage(QWidget):
             self.rescan()
         elif self.folder_previews != old[3]:
             self.home.repaint_cards()
+
+    def set_del_orig(self, on: bool):
+        self.del_orig = on
+        self.host.set("del_orig", on)
+
+    def trash_originals(self, paths: list[str]) -> int:
+        from ..core.trash import send_to_trash
+        n = sum(1 for p in paths if send_to_trash(p))
+        if n:
+            self._sig = None
+            self.rescan()
+        return n
 
     def set_folder_previews(self, on: bool):
         self.host.set("folder_previews", on)

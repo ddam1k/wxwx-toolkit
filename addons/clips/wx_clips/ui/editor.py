@@ -72,6 +72,8 @@ class StripCard(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setOpacity(self._in)
+        if self.index >= len(self.ctx.clips):
+            return
         c: Clip = self.ctx.clips[self.index]
         on = self.index == self.ctx.cur
         p.translate(0, 2 - 2 * self._h)
@@ -560,8 +562,10 @@ class EditorView(QWidget):
         tv.addWidget(self.meta)
         head.addLayout(tv, 1)
         self.b_gallery = button(t("gallery"), "ghost")
+        self.b_gallery.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.b_gallery.clicked.connect(self.go_home)
         self.b_clear = button(t("clear"), "ghost")
+        self.b_clear.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.b_clear.clicked.connect(self._clear)
         head.addWidget(self.b_gallery, 0, Qt.AlignmentFlag.AlignBottom)
         head.addWidget(self.b_clear, 0, Qt.AlignmentFlag.AlignBottom)
@@ -795,7 +799,11 @@ class EditorView(QWidget):
         self.b_dest_open.clicked.connect(self._open_dir)
         dl.addWidget(self.b_dest_change)
         dl.addWidget(self.b_dest_open)
-        bl.addWidget(block(h, self.sw_tk, self.seg_dest, self.dest_box))
+        self.sw_del = SwitchRow()
+        self.sw_del.title.setText(t("del_orig"))
+        self.sw_del.sub.setText(t("del_orig_s"))
+        self.sw_del.toggled.connect(self.ctx.set_del_orig)
+        bl.addWidget(block(h, self.sw_tk, self.seg_dest, self.dest_box, self.sw_del))
         bl.addStretch()
         tr = QHBoxLayout()
         tr.addWidget(label(t("total"), "totalLabel"))
@@ -897,17 +905,24 @@ class EditorView(QWidget):
         if self.running:
             return
         self.ctx.remove_clip(i)
+        self.render_strip()
         if not self.ctx.clips:
             self.player.pause()
+            self.timeline.set_clip(None)
+            self.view.clear()
             self.go_home.emit()
             return
-        self.load_current()
+        self.load_current(strip=False)
 
     def _clear(self):
         if self.running:
             return
         self.player.pause()
+        self.player.stop_ranges()
         self.ctx.clear_clips()
+        self.timeline.set_clip(None)
+        self.view.clear()
+        self.render_strip()
         self.go_home.emit()
         self.toast(t("cleared"))
 
@@ -1103,7 +1118,7 @@ class EditorView(QWidget):
         c = self.clip
         if not c or not c.info or c.mode == m:
             return
-        fade_change(self.pages.currentWidget(), lambda: (c.set_mode(m), self.changed()), 300, 0, -14, top=150)
+        fade_change(self.pages.currentWidget(), lambda: (c.set_mode(m), self.changed()), 300, 0, -14, top=150, bg="panel")
         if m == "multi" and not c.multi:
             self.toast(t("multi_tip"))
 
@@ -1294,10 +1309,7 @@ class EditorView(QWidget):
             return
         self.step = n
         if animated and self.pages.isVisible():
-            fade_change(self.pages, lambda: self.pages.setCurrentIndex(n - 1), 360, -60 if n == 2 else 60)
-            w = self.pages.currentWidget()
-            w.move(46 if n == 2 else -46, 0)
-            animate(w, 46 if n == 2 else -46, 0, 460, lambda v: w.move(int(v), 0), QEasingCurve.Type.OutCubic)
+            fade_change(self.pages, lambda: self.pages.setCurrentIndex(n - 1), 380, -70 if n == 2 else 70, bg="panel")
         else:
             self.pages.setCurrentIndex(n - 1)
         self.st1.state = "on" if n == 1 else "done"
@@ -1332,7 +1344,8 @@ class EditorView(QWidget):
             self.led.set_color("#d0a060")
             self.gpu_text.setText(t("gpu_none"))
         else:
-            self.seg_enc.set_options([("gpu", f"{t('enc_gpu')}", gpu[1] or t("enc_gpu_s")), ("cpu", t("enc_cpu"), t("enc_cpu_s"))])
+            name = (gpu[1] or "").replace("NVIDIA ", "").replace("GeForce ", "").strip()
+            self.seg_enc.set_options([("gpu", t("enc_gpu"), name or t("enc_gpu_s")), ("cpu", t("enc_cpu"), t("enc_cpu_s"))])
             self.seg_enc.set_value(ctx.encoder, animated=False)
         # tracks of the current clip
         while self.tracks_box.count():
@@ -1355,6 +1368,7 @@ class EditorView(QWidget):
                 row.toggled.connect(lambda on, i=i: self._track(i, on))
                 self.tracks_box.addWidget(row)
         self.sw_tk.switch.set_now(ctx.use_tk)
+        self.sw_del.switch.set_now(ctx.del_orig)
         self.seg_dest.setVisible(not ctx.use_tk)
         self.seg_dest.set_value(ctx.own_mode, animated=False)
         self.render_dest()
@@ -1520,7 +1534,12 @@ class EditorView(QWidget):
                 if c.status in ("queued", "work"):
                     c.status, c.progress = "", 0.0
         else:
-            self.ctx.mark_done([c.path for c in self.ctx.clips if c.status == "done"])
+            done = [c.path for c in self.ctx.clips if c.status == "done"]
+            self.ctx.mark_done(done)
+            if self.ctx.del_orig and done:
+                n = self.ctx.trash_originals(done)
+                if n:
+                    QTimer.singleShot(2600, lambda: self.toast(t("trashed", n=n)))
             mb = sum(os.path.getsize(p) for p in self._done_out if os.path.exists(p)) / 1048576
             if self._errors:
                 self.toast(t("done_errors", n=self._errors))

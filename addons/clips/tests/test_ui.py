@@ -40,7 +40,7 @@ class ClipsUiSmoke(unittest.TestCase):
         a = make("Valorant", "2026.11.16 - 23.17.09.05", 12, "red")
         b = make("Valorant", "2026.11.16 - 21.40.11.02", 8, "purple")
         c = make("Grand Theft Auto V", "2026.11.16 - 22.59.30.01", 10, "orange")
-        make("Jre-1.8", "2026.10.25 - 11.52.00.01", 6, "green", old=True)
+        jre = make("Jre-1.8", "2026.10.25 - 11.52.00.01", 6, "green", old=True)
 
         class Host(QObject):
             lang_changed = Signal(str)
@@ -53,6 +53,7 @@ class ClipsUiSmoke(unittest.TestCase):
             def __init__(self):
                 super().__init__()
                 self.store = {("clips", "nv_dir"): str(nv), ("clips", "last_launch"): time.time() - 86400,
+                              ("clips", "del_orig"): True,
                               ("compress", "presets"): [{"id": "u1", "title": "Клипы 1080p60",
                                                          "values": {"format": "mp4", "codec": "h264", "quality": 70,
                                                                     "res": 1080, "fps_idx": 0, "mode": "quality"}}]}
@@ -164,9 +165,30 @@ class ClipsUiSmoke(unittest.TestCase):
         self.assertTrue(all(k.status == "done" for k in page.clips), [k.error for k in page.clips])
         shot("7_done")
 
+        self.assertTrue(spin(5, lambda: not any(os.path.exists(x) for x in (a, b, c))), "originals not trashed")
         page.show_home()
         shot("8_home_after")
-        self.assertEqual(len(page.new_list), 0)          # processed clips are no longer new
+        self.assertTrue(spin(10, lambda: len(page.new_list) == 0))   # processed (and trashed) clips are gone
+
+        # "+ Add" from the strip -> gallery -> pick another clip -> it joins the session
+        n0 = len(page.clips)
+        page.picks.add(jre)
+        page.home._open_picked()
+        spin(2)
+        self.assertEqual(len(page.clips), n0 + 1, "picked clip was not added")
+        self.assertIs(page.stack.currentWidget(), ed)
+        self.assertEqual(ed.clip.path, jre)
+        shot("8b_added")
+
+        # Clear, then Gallery: must not crash, must end on the gallery with an empty session
+        ed._clear()
+        spin(1)
+        self.assertEqual(page.clips, [])
+        self.assertIs(page.stack.currentWidget(), page.home)
+        page.show_editor()
+        page.show_home()
+        spin(0.6)
+        shot("8c_cleared")
 
         tab = addon.settings(host)
         tab.resize(640, 640)
