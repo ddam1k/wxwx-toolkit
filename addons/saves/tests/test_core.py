@@ -143,6 +143,20 @@ class ParseTests(unittest.TestCase):
         self.assertIn("Private video", ytdlp.last_error("[info] x\nERROR: [youtube] x: Private video\n"))
 
 
+class MoveOutTests(unittest.TestCase):
+    def test_never_overwrites(self):
+        from wx_saves.core.files import move_out
+        d = Path(tempfile.mkdtemp())
+        staged, out = d / "job" / "out", d / "dl"
+        (staged / "List").mkdir(parents=True)
+        (out / "List").mkdir(parents=True)
+        (out / "List" / "Song.mp3").write_text("old")
+        (staged / "List" / "Song.mp3").write_text("new")
+        dest = move_out(str(staged / "List" / "Song.mp3"), str(staged), str(out))
+        self.assertEqual(Path(dest), out / "List" / "Song (2).mp3")
+        self.assertEqual((out / "List" / "Song.mp3").read_text(), "old")
+
+
 class HistoryTests(unittest.TestCase):
     def test_add_find_prune(self):
         d = Path(tempfile.mkdtemp())

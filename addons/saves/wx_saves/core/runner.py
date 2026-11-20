@@ -6,6 +6,7 @@ cancel leaves nothing behind in the user's folder.
 """
 from __future__ import annotations
 
+import dataclasses
 import os
 import re
 import shutil
@@ -18,6 +19,7 @@ from dataclasses import dataclass, field
 from PySide6.QtCore import QObject, Signal
 
 from . import ytdlp
+from .files import move_out
 
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
@@ -169,7 +171,13 @@ class Worker(QObject):
         if not self.tools.ytdlp:
             j.err_kind = "tool"
             return False
-        args = ytdlp.download_args(j.url, j.opts, self.tools.ffmpeg_dir, self.tools.deno)
+        o, staged = j.opts, ""
+        if o.what == "audio" and j.tmp:
+            # yt-dlp would reuse a video of the same name already in the folder and delete it after
+            # extracting the sound → audio is made in the job's own folder and moved out when ready
+            staged = os.path.join(j.tmp, "out")
+            o = dataclasses.replace(o, folder=staged)
+        args = ytdlp.download_args(j.url, o, self.tools.ffmpeg_dir, self.tools.deno)
         if j.tmp:
             os.makedirs(j.tmp, exist_ok=True)
             args[-2:-2] = ["-P", f"temp:{j.tmp}"]
@@ -224,6 +232,12 @@ class Worker(QObject):
             j.err_kind = ytdlp.error_kind(text)
             j.err_text = ytdlp.last_error(text) or f"yt-dlp exited with {code}"
             return False
+        if staged:
+            try:
+                j.path = move_out(j.path, staged, j.opts.folder or ".")
+            except OSError as e:
+                j.err_kind, j.err_text = "other", str(e)
+                return False
         return True
 
     def _recode(self) -> bool:

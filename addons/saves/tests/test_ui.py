@@ -38,6 +38,7 @@ class SavesUiSmoke(unittest.TestCase):
                         str(www / "thumb.jpg")], check=True)
         srv = http.server.ThreadingHTTPServer(
             ("127.0.0.1", 0), partial(http.server.SimpleHTTPRequestHandler, directory=str(www)))
+        srv.handle_error = lambda *_a: None          # yt-dlp closes the probe request early — that's fine
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{srv.server_address[1]}"
 
@@ -160,7 +161,7 @@ class SavesUiSmoke(unittest.TestCase):
         self.assertTrue(os.path.isfile(j.path), j.path)
         print("saved:", j.path, j.size)
 
-        # the same link as MP3
+        # the same link as MP3 — the MP4 already in the folder must stay
         page.url.setText(f"{base}/Cloth%20sim%20breakdown.mp4")
         self.assertTrue(spin(60, lambda: page.state == "video"))
         page.panel._set_what("audio")
