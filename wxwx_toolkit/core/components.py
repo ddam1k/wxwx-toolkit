@@ -1,5 +1,5 @@
-"""Shared command-line tools that add-ons need (ffmpeg, yt-dlp, …), downloaded once into
-%LOCALAPPDATA%\\wxwx-toolkit\\components\\<name>\\ and shared by every add-on (no Qt here)."""
+"""Shared command-line tools that add-ons need (ffmpeg, yt-dlp, deno, …), downloaded once into
+<data>\\components\\<name>\\ and shared by every add-on (no Qt here)."""
 from __future__ import annotations
 
 import json
@@ -46,7 +46,9 @@ class Component:
 
     def version(self) -> str | None:
         cache = self.folder() / "version.json"
-        if self.installed_locally and cache.is_file():
+        exe = self.folder() / (self.files[0] + EXE)
+        fresh = cache.is_file() and exe.is_file() and cache.stat().st_mtime >= exe.stat().st_mtime - 2
+        if self.installed_locally and fresh:      # the tool may update itself (yt-dlp -U) → then ask it
             try:
                 return json.loads(cache.read_text("utf-8")).get("version")
             except (OSError, ValueError):
@@ -67,7 +69,11 @@ class Component:
 COMPONENTS: dict[str, Component] = {
     "ffmpeg": Component("ffmpeg", "ffmpeg", ["ffmpeg", "ffprobe"], ["-hide_banner", "-version"], 200),
     "yt-dlp": Component("yt-dlp", "yt-dlp", ["yt-dlp"], ["--version"], 18),
+    # yt-dlp needs a JavaScript runtime for YouTube since 2025.11 — deno is the recommended one
+    "deno": Component("deno", "Deno", ["deno"], ["--version"], 45),
 }
+
+DENO_ASSET = "deno-x86_64-pc-windows-msvc.zip"
 
 
 # ---------------------------------------------------------------- download sources
@@ -118,6 +124,19 @@ def install(cid: str, progress=None) -> str:
         net.download(asset["browser_download_url"], str(c.folder() / "yt-dlp.exe"), progress,
                      expected_size=int(asset.get("size") or 0))
         version = rel.get("tag_name", "")
+    elif cid == "deno":
+        rel = net.latest_release("denoland/deno")
+        asset = next(a for a in rel["assets"] if a["name"] == DENO_ASSET)
+        zpath = net.download(asset["browser_download_url"], str(tmp / asset["name"]), progress,
+                             expected_size=int(asset.get("size") or 0))
+        try:
+            with zipfile.ZipFile(zpath) as z:
+                member = next(m for m in z.namelist() if m.rsplit("/", 1)[-1] == "deno.exe")
+                with z.open(member) as src, open(c.folder() / "deno.exe", "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+        finally:
+            Path(zpath).unlink(missing_ok=True)
+        version = rel.get("tag_name", "").lstrip("v")
     else:
         raise KeyError(cid)
     _write_version(c, version)

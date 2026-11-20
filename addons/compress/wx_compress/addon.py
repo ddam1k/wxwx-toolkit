@@ -52,7 +52,7 @@ def create(host):
     theme_mod.theme.name = host.theme
     app = QApplication.instance()
     if app is not None:
-        theme_mod.FONT_FAMILY = app.font().family()
+        theme_mod.set_font(app.font().family())
     _sync_tools(host)
     widgets_mod.set_hints(getattr(host, "hints", True))
 

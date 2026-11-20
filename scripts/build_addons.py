@@ -4,6 +4,7 @@
     python scripts/build_addons.py compress   just one
 
 An add-on folder holds manifest.json + its package (wx_<something>/); tests/ and caches are left out.
+The shared kit copies (wx_<id>/kit/) must match addons/_shared/kit — see scripts/sync_kit.py.
 If the package has __version__, it must match manifest.json (the add-on shows it in its .wtp presets).
 Prints one line per zip: <id> <version> <path>
 """
@@ -43,6 +44,10 @@ def build(folder: Path, out_dir: Path) -> tuple[str, str, Path]:
 
 
 def main(argv: list[str]) -> int:
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import sync_kit
+    if sync_kit.main(["--check"]):            # never ship an add-on with a stale copy of the shared kit
+        return 1
     out_dir = ROOT / "dist" / "addons"
     folders = sorted(p for p in (ROOT / "addons").iterdir() if (p / "manifest.json").is_file())
     if argv:
