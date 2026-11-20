@@ -5,7 +5,7 @@ import math
 
 from PySide6.QtCore import QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import QAbstractButton, QSizePolicy, QWidget
+from PySide6.QtWidgets import QAbstractButton, QLabel, QSizePolicy, QWidget
 
 from .theme import font, theme
 from .widgets import HINTS, ICONS, animate, icon_pixmap, mix
@@ -291,3 +291,27 @@ class Shimmer(QWidget):
             p.setPen(theme.c("faint"))
             p.setFont(font(9))
             p.drawText(QRectF(236, 96, self.width() - 250, 20), Qt.AlignmentFlag.AlignLeft, self.text)
+
+
+class Elide(QLabel):
+    """A one-line label that shortens itself with «…» instead of widening its parent (titles, paths)."""
+
+    def __init__(self, name: str, mode=Qt.TextElideMode.ElideRight, parent=None):
+        super().__init__(parent)
+        self._mode = mode
+        self.setObjectName(name)
+        self._full = ""
+        self.setMinimumWidth(40)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+
+    def set_full(self, text: str):
+        self._full = text
+        self.setToolTip(text)
+        self._elide()
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._elide()
+
+    def _elide(self):
+        self.setText(self.fontMetrics().elidedText(self._full, self._mode, max(20, self.width())))

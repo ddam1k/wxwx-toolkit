@@ -107,7 +107,7 @@ STR = {
         # list
         "tab_now": "Сейчас", "tab_hist": "История", "search": "Найти в истории",
         "empty_t": "Скопируй ссылку — и сюда", "empty_s": "Ctrl+V в любом месте окна. Несколько ссылок сразу — тоже можно.",
-        "st_wait": "В очереди", "st_pause": "Пауза · {p}%", "st_done": "Готово · {s}", "st_cancel": "Отменено",
+        "st_wait": "В очереди", "st_pause": "Пауза · {p}%", "st_done": "Готово · папка «{s}»", "st_cancel": "Отменено",
         "stage_video": "Видео", "stage_audio": "Звук", "stage_dl": "Скачиваю", "stage_merge": "Склеиваю",
         "stage_convert": "Перевожу", "stage_recode": "Пересжимаю в H.264", "stage_finish": "Дописываю теги",
         "stage_start": "Начинаю…", "eta": "ещё {t}",
@@ -209,7 +209,7 @@ STR = {
         "ex_hint": "Ctrl+V anywhere in the window — and the link is here",
         "tab_now": "Now", "tab_hist": "History", "search": "Search history",
         "empty_t": "Copy a link — and drop it here", "empty_s": "Ctrl+V anywhere in the window. Several links at once work too.",
-        "st_wait": "Queued", "st_pause": "Paused · {p}%", "st_done": "Done · {s}", "st_cancel": "Cancelled",
+        "st_wait": "Queued", "st_pause": "Paused · {p}%", "st_done": "Done · in «{s}»", "st_cancel": "Cancelled",
         "stage_video": "Video", "stage_audio": "Audio", "stage_dl": "Downloading", "stage_merge": "Merging",
         "stage_convert": "Converting", "stage_recode": "Re-encoding to H.264", "stage_finish": "Writing tags",
         "stage_start": "Starting…", "eta": "{t} left",

@@ -866,6 +866,7 @@ class SavesPage(QWidget):
                     self.workers[j.id] = w
                 w.tools = tools
                 w.start()
+                self._job_changed(j.id)            # «В очереди» → «Начинаю…» right away
                 busy += 1
         self._counts()
 

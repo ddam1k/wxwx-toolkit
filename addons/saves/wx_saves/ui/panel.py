@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QFileDialog, QFrame, QGraphicsOpacityEffect, QHBo
 from ..core import ytdlp
 from ..core.i18n import fmt_size, t
 from ..kit.common import SmoothScroll, button, label
-from .art import ModeCard
+from .art import Elide, ModeCard
 from .widgets import Chip, FlowLayout, IconBadge, ProgressButton, SectionHeader, Segmented, SwitchRow
 
 
@@ -173,7 +173,7 @@ class OptionsPanel(QWidget):
         dl.addWidget(IconBadge("folder", 22, 20, plain=True, tint=True))
         dv = QVBoxLayout()
         dv.setSpacing(2)
-        self.dest_path = label("", "destPath")
+        self.dest_path = Elide("destPath", Qt.TextElideMode.ElideMiddle)
         self.dest_sub = label("", "destSub")
         dv.addWidget(self.dest_path)
         dv.addWidget(self.dest_sub)
@@ -221,14 +221,11 @@ class OptionsPanel(QWidget):
         fv.addSpacing(10)
         st = QHBoxLayout()
         st.setSpacing(7)
-        st.addStretch()
         st.addWidget(IconBadge("folder", 16, 15, plain=True, tint=True))
         self.l_saveto = label("", "saveTo")
         st.addWidget(self.l_saveto)
-        self.saveto = label("", "saveToPath")
-        self.saveto.setMaximumWidth(250)
-        st.addWidget(self.saveto)
-        st.addStretch()
+        self.saveto = Elide("saveToPath", Qt.TextElideMode.ElideMiddle)
+        st.addWidget(self.saveto, 1)
         fv.addLayout(st)
         outer.addWidget(footer)
 
@@ -290,11 +287,11 @@ class OptionsPanel(QWidget):
 
     def set_dest(self, use_tk: bool, path: str, sub: str):
         self.sw_tk.switch.set_now(use_tk)
-        self.dest_path.setText(path)
+        self.dest_path.set_full(path)
         self.dest_sub.setText(sub)
         self.dest_btn.setVisible(not use_tk)
         self.dest.setEnabled(not use_tk)
-        self.saveto.setText(path)
+        self.saveto.set_full(path)
 
     def refresh(self):
         """Show the blocks that make sense for the current link and options."""

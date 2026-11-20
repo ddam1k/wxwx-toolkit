@@ -1,6 +1,7 @@
 """Rows of the «Сейчас» and «История» lists and the picks list of a playlist."""
 from __future__ import annotations
 
+import os
 from datetime import datetime
 
 from PySide6.QtCore import QRectF, QSize, Qt, Signal
@@ -11,30 +12,9 @@ from ..core import ytdlp
 from ..core.i18n import fmt_size, t
 from ..core.runner import Job
 from ..kit.common import IconButton, label
-from .art import Picture, site_color
+from .art import Elide, Picture, site_color
 from .theme import font, theme
 from .widgets import ThinBar, icon_pixmap, mix
-
-
-class Elide(QLabel):
-    def __init__(self, name: str, parent=None):
-        super().__init__(parent)
-        self.setObjectName(name)
-        self._full = ""
-        self.setMinimumWidth(40)
-        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-
-    def set_full(self, text: str):
-        self._full = text
-        self.setToolTip(text)
-        self._elide()
-
-    def resizeEvent(self, e):
-        super().resizeEvent(e)
-        self._elide()
-
-    def _elide(self):
-        self.setText(self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideRight, max(20, self.width())))
 
 
 def clock(sec: float | None) -> str:
@@ -146,7 +126,7 @@ class DlRow(QFrame):
         if j.state == "pause":
             return t("st_pause", p=round(j.frac * 100))
         if j.state == "done":
-            return t("st_done", s=fmt_size(j.size))
+            return t("st_done", s=os.path.basename(os.path.dirname(j.path)) or "—")
         if j.state == "cancel":
             return t("st_cancel")
         if j.state == "err":
