@@ -1,0 +1,21 @@
+{
+  "id": "saves",
+  "name": {
+    "ru": "Сохранёнки",
+    "en": "Saves"
+  },
+  "description": {
+    "ru": "Видео и звук с YouTube, Instagram, TikTok и сотен других сайтов · качество, MP4 или MP3, кусок видео, история",
+    "en": "Video and audio from YouTube, Instagram, TikTok and hundreds of other sites · quality, MP4 or MP3, a piece of a video, history"
+  },
+  "version": "1.0.0",
+  "entry": "wx_saves.addon:create",
+  "settings": "wx_saves.addon:settings",
+  "icon": "dl",
+  "needs": [
+    "yt-dlp",
+    "ffmpeg",
+    "deno"
+  ],
+  "min_toolkit": "1.3.1"
+}

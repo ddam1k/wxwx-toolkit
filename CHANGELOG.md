@@ -2,6 +2,12 @@
 
 Each section becomes the release notes and the "what's new" tooltip in the update bar.
 
+## 1.3.1
+- Ready for the new Saves add-on: the toolkit can download Deno (yt-dlp needs it for YouTube), and add-ons can hand files to each other — e.g. «Compress» on a finished download opens it in Video.
+- Add-ons share one set of widgets, so the look and the «fewer hints» switch behave the same everywhere.
+- Готовность к новому аддону «Сохранёнки»: тулкит умеет скачивать Deno (он нужен yt-dlp для YouTube), а аддоны могут передавать друг другу файлы — например, «Сжать» у готовой загрузки открывает её в «Видео».
+- У аддонов теперь общий набор виджетов, поэтому вид и переключатель «меньше подсказок» везде работают одинаково.
+
 ## 1.3.0
 - Fewer hints: one switch in Settings → General hides the explanations under options, in the toolkit and in every add-on.
 - Finished file suffix: `_wx`, `_trim` or your own, set once for the whole toolkit. Each add-on can keep it or use its own (Video got its own Settings tab for that).

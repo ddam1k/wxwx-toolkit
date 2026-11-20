@@ -78,6 +78,8 @@ def create(host):
         host.hints_changed.connect(lambda on: widgets_mod.set_hints(on, panel))
     if hasattr(host, "suffix_changed"):
         host.suffix_changed.connect(lambda _s: panel.render())
+    if hasattr(host, "files_received"):                # toolkit 1.3.1+: e.g. Saves hands over a download
+        host.files_received.connect(panel.add_paths)
     return panel
 
 

@@ -31,6 +31,10 @@
     host.suffix_widget(sample) -> QWidget   ready block for the add-on's settings tab:
                             «Как в настройках тулкита» or its own _wx / _trim / custom
 
+    Hand files to another add-on (toolkit 1.3.1+):
+    host.send_to(addon_id, [paths]) -> bool   opens that add-on and gives it the files
+    host.files_received     Signal(list)      files another add-on sent to this one
+
 The add-on's page may also define (toolkit 1.2+ calls them before a hot update / removal):
     is_busy() -> bool       True while it works; the toolkit then postpones a quiet auto-update
     shutdown()              stop workers / child processes — the old page is about to be destroyed
@@ -61,9 +65,10 @@ class Host(QObject):
     settings_changed = Signal(str)
     hints_changed = Signal(bool)
     suffix_changed = Signal(str)
+    files_received = Signal(list)
 
     def __init__(self, addon_id: str, toast_fn, folder_fn, parent=None, installed_fn=None, open_settings_fn=None,
-                 toolkit_suffix_fn=None):
+                 toolkit_suffix_fn=None, send_fn=None):
         super().__init__(parent)
         self.addon_id = addon_id
         self._toast = toast_fn
@@ -72,6 +77,7 @@ class Host(QObject):
         self._open_settings = open_settings_fn or (lambda _aid: None)
         self._store = store()
         self._toolkit_suffix = toolkit_suffix_fn or (lambda: "_" + naming.DEFAULT)
+        self._send = send_fn
         self.api_version = API_VERSION
         self.toolkit_version = __version__
         _hints.changed.connect(self.hints_changed)
@@ -152,3 +158,7 @@ class Host(QObject):
     def suffix_widget(self, sample: str = "video.mp4"):
         from .suffix import AddonSuffixBlock
         return AddonSuffixBlock(self, sample)
+
+    # ---- hand files to another add-on (1.3.1+)
+    def send_to(self, addon_id: str, paths: list) -> bool:
+        return bool(self._send and self._send(addon_id, [str(p) for p in paths]))

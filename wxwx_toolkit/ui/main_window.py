@@ -302,6 +302,14 @@ class MainWindow(FramelessMainWindow):
         self.hosts[aid].preset_received.emit(data)
         return True
 
+    def send_files(self, aid: str, paths: list) -> bool:
+        """An add-on hands files to another one (e.g. Saves → Video)."""
+        if aid not in self.hosts or aid not in self.installed:
+            return False
+        self.go(aid)
+        self.hosts[aid].files_received.emit(list(paths))
+        return True
+
     def bring_to_front(self):
         if self.isMinimized():
             self.showNormal()
@@ -371,7 +379,7 @@ class MainWindow(FramelessMainWindow):
         self._unload_addon(m.id)
         host = Host(m.id, self.toast.show_text, self.folder, self,
                     installed_fn=lambda a: a in self.installed, open_settings_fn=self.open_addon_settings,
-                    toolkit_suffix_fn=self.toolkit_suffix)
+                    toolkit_suffix_fn=self.toolkit_suffix, send_fn=self.send_files)
         title = m.title(i18n.lang())
         settings_widget = None
         if not m.compatible:

@@ -68,6 +68,8 @@ host.hint(label, ...)      # пометить пояснения: в режим�
 host.suffix()              # "_wx": суффикс готового файла — общий тулкита или свой у аддона (1.3+)
 host.suffix_changed        # Signal(str) (1.3+)
 host.suffix_widget("clip.mp4")  # готовый блок для вкладки настроек: «Как в настройках тулкита» или свой (1.3+)
+host.send_to("compress", [path])  # открыть другой аддон и передать ему файлы (1.3.1+)
+host.files_received        # Signal(list): файлы, которые прислал другой аддон (1.3.1+)
 host.data_dir              # pathlib.Path для своих файлов
 host.toolkit_version       # "1.0.0"
 host.api_version           # 1

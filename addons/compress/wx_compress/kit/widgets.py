@@ -24,8 +24,9 @@ def set_hints(on: bool, root: QWidget | None = None) -> None:
     if root is None:
         return
     for w in root.findChildren(QWidget):
-        if isinstance(w, (Segmented, Chip)):
-            w.hints_changed()
+        fn = getattr(w, "hints_changed", None)        # Segmented, Chip and any add-on widget that has it
+        if callable(fn) and not hasattr(fn, "connect"):
+            fn()
 
 
 def animate(owner, start: float, end: float, ms: int, on_value, curve=QEasingCurve.Type.OutCubic,
