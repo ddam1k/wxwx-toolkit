@@ -50,12 +50,14 @@ def main(argv: list[str]) -> int:
             else:
                 b.unlink()
                 print("removed", b.relative_to(ROOT))
+    # reports go to stderr: build_addons.py runs this check and its stdout is read as «id version zip» lines
     if bad:
-        print("kit copies differ from addons/_shared/kit — run: python scripts/sync_kit.py")
-        print("\n".join("  " + b for b in bad))
+        print("kit copies differ from addons/_shared/kit — run: python scripts/sync_kit.py", file=sys.stderr)
+        print("\n".join("  " + b for b in bad), file=sys.stderr)
         return 1
     if check:
-        print("kit OK in", ", ".join(str(t.relative_to(ROOT / "addons")) for t in targets()) or "no add-ons")
+        print("kit OK in", ", ".join(str(t.relative_to(ROOT / "addons")) for t in targets()) or "no add-ons",
+              file=sys.stderr)
     return 0
 
 
