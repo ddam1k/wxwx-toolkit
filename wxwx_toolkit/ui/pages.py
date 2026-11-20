@@ -12,7 +12,9 @@ from ..core.addons import CatalogEntry, Manifest
 from ..core.components import COMPONENTS
 from ..core.i18n import fmt_size, lang, t
 from ..core.paths import data_dir
+from .hints import hints, mark as mark_hint
 from .shell import IconTile, LangCard, SwitchRow, TabBar
+from .suffix import SuffixPicker
 from .widgets import FlowLayout, ProgressButton, animate
 
 
@@ -303,6 +305,8 @@ class SettingsPage(Page):
     lang_chosen = Signal(str)
     option_changed = Signal(str, bool)
     folder_change = Signal(str)
+    hints_toggled = Signal(bool)          # True = show hints
+    suffix_set = Signal(str, str)         # kind, custom
 
     OPTIONS = ("au_addons", "au_new", "au_ask")
 
@@ -318,6 +322,18 @@ class SettingsPage(Page):
             card.clicked.connect(lambda _=False, c=code: self.lang_chosen.emit(c))
             row.addWidget(card)
         self.col.addLayout(row)
+        self.sec_view = self._section()
+        self.hints_row = SwitchRow()
+        self.hints_row.toggled.connect(lambda less: self.hints_toggled.emit(not less))
+        self.col.addWidget(self.hints_row)
+        self.sec_naming = self._section()
+        self.naming_note = label("", "rowSub", wrap=True)
+        mark_hint(self.naming_note)
+        self.col.addWidget(self.naming_note)
+        self.col.addSpacing(10)
+        self.suffix_picker = SuffixPicker()
+        self.suffix_picker.changed.connect(self.suffix_set)
+        self.col.addWidget(self.suffix_picker)
         self.sec_upd = self._section()
         self.rows = {}
         for key in self.OPTIONS:
@@ -346,6 +362,7 @@ class SettingsPage(Page):
             self.col.addSpacing(8)
             self.folder_rows[kind] = (title, path, btn)
         self.folders_note = label("", "rowSub", wrap=True)
+        mark_hint(self.folders_note)
         self.col.addWidget(self.folders_note)
         self.sec_presets = self._section()
         prow = QFrame()
@@ -359,6 +376,7 @@ class SettingsPage(Page):
         tv = QVBoxLayout()
         tv.setSpacing(2)
         self.wtp_title, self.wtp_sub = label("", "rowTitle"), label("", "rowSub", wrap=True)
+        mark_hint(self.wtp_sub)
         tv.addWidget(self.wtp_title)
         tv.addWidget(self.wtp_sub)
         pl.addLayout(tv, 1)
@@ -392,6 +410,13 @@ class SettingsPage(Page):
     def refresh(self) -> None:
         self.sec_lang.setText(t("language"))
         self.sec_upd.setText(t("updates"))
+        self.sec_view.setText(t("view"))
+        self.hints_row.set_texts(t("hints_t"), t("hints_s"))
+        self.hints_row.switch.set_now(not hints.on)
+        self.sec_naming.setText(t("naming"))
+        self.naming_note.setText(t("naming_note"))
+        self.suffix_picker.refresh()
+        self.suffix_picker.set_values(*self.ctx.toolkit_suffix_values())
         self.sec_data.setText(t("data"))
         self.sec_folders.setText(t("folders"))
         self.sec_presets.setText(t("presets"))

@@ -15,6 +15,19 @@ from .theme import HAIR_BLACK, HAIR_WHITE, font, theme
 
 
 # ---------- helpers ----------
+# «Меньше подсказок» (toolkit 1.3+): small print in segmented buttons and chips is drawn only while on
+HINTS = {"on": True}
+
+
+def set_hints(on: bool, root: QWidget | None = None) -> None:
+    HINTS["on"] = bool(on)
+    if root is None:
+        return
+    for w in root.findChildren(QWidget):
+        if isinstance(w, (Segmented, Chip)):
+            w.hints_changed()
+
+
 def animate(owner, start: float, end: float, ms: int, on_value, curve=QEasingCurve.Type.OutCubic,
             on_done=None) -> QVariantAnimation:
     a = QVariantAnimation(owner)
@@ -239,8 +252,15 @@ class Segmented(QWidget):
         self._anim: QVariantAnimation | None = None
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedHeight(48 if any(o[2] for o in options) else 36)
+        self._fit()
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def _fit(self) -> None:
+        self.setFixedHeight(48 if HINTS["on"] and any(o[2] for o in self.options) else 36)
+
+    def hints_changed(self) -> None:
+        self._fit()
+        self.update()
 
     def value(self) -> str:
         return self._value
@@ -329,7 +349,7 @@ class Segmented(QWidget):
                 col.setAlpha(90)
             p.setPen(col)
             p.setFont(f_title)
-            if sub:
+            if sub and HINTS["on"]:
                 top = QRectF(cell.left(), cell.top() + 3, cell.width(), 19)
                 p.drawText(top, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom, title)
                 sc = theme.c("faint")
@@ -357,6 +377,10 @@ class Chip(QAbstractButton):
         self._h = 0.0
         self.toggled.connect(lambda c: animate(self, self._t, 1 if c else 0, 260, self._set_t))
 
+    def hints_changed(self) -> None:
+        self.updateGeometry()
+        self.update()
+
     def nextCheckState(self):  # checked state is driven from outside
         pass
 
@@ -381,7 +405,7 @@ class Chip(QAbstractButton):
     def sizeHint(self):
         f, fs = self._fonts()
         w = QFontMetricsF(f).horizontalAdvance(self.text())
-        if self.sub:
+        if self.sub and HINTS["on"]:
             w += 6 + QFontMetricsF(fs).horizontalAdvance(self.sub)
         if self.dot:
             w += 13
@@ -419,7 +443,7 @@ class Chip(QAbstractButton):
         p.setPen(fg)
         tw = QFontMetricsF(f).horizontalAdvance(self.text())
         p.drawText(QRectF(x, r.top(), tw + 2, r.height()), Qt.AlignmentFlag.AlignVCenter, self.text())
-        if self.sub:
+        if self.sub and HINTS["on"]:
             sc = QColor(fg)
             sc.setAlpha(round(sc.alpha() * 0.6))
             p.setPen(sc)
@@ -1059,6 +1083,7 @@ class SwitchRow(QWidget):
         self.title.setObjectName("rowTitle")
         self.sub = QLabel()
         self.sub.setObjectName("rowSub")
+        self.sub.setProperty("hint", True)
         tv.addWidget(self.title)
         tv.addWidget(self.sub)
         lay.addLayout(tv, 1)

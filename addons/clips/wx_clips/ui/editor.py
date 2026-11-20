@@ -618,6 +618,7 @@ class EditorView(QWidget):
         self.timeline.released.connect(self._scrub_end)
         lv.addWidget(self.timeline)
         self.hint = label("", "hint")
+        self.hint.setProperty("hint", True)
         self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lv.addWidget(self.hint)
         root.addWidget(left, 1)
@@ -720,6 +721,7 @@ class EditorView(QWidget):
         tv = QVBoxLayout()
         tv.setSpacing(0)
         tl = label(t("total_lc"), "note")
+        tl.setProperty("hint", False)
         tl.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.seg_total = label("", "segTotal")
         self.seg_total.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -1362,7 +1364,9 @@ class EditorView(QWidget):
         if c and c.info:
             names = c.info.audio_tracks
             if not names:
-                self.tracks_box.addWidget(label(t("no_audio"), "note"))
+                na = label(t("no_audio"), "note")
+                na.setProperty("hint", False)
+                self.tracks_box.addWidget(na)
             for i, nm in enumerate(names):
                 row = SwitchRow()
                 default = (t("track_game") if i == 0 else t("track_mic")) if len(names) == 2 else t("track_x")
@@ -1487,7 +1491,7 @@ class EditorView(QWidget):
         tmp = Path(tempfile.gettempdir())
         try:
             plan = plan_clip(c.info, c.ranges() if c.trimmed() else [], c.track_indexes(), s,
-                             c.merge or c.mode == "single", folder, tmp, self._reserved)
+                             c.merge or c.mode == "single", folder, tmp, self._reserved, self.ctx.suffix())
         except Exception as ex:
             c.status, c.error = "error", str(ex)
             self._errors += 1

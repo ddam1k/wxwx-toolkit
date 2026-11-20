@@ -185,6 +185,8 @@ def label(text: str, name: str, wrap: bool = False) -> QLabel:
     lb = QLabel(text)
     lb.setObjectName(name)
     lb.setWordWrap(wrap)
+    if name == "note":
+        lb.setProperty("hint", True)     # hidden in «Меньше подсказок» mode (toolkit 1.3+)
     return lb
 
 

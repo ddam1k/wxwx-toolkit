@@ -48,14 +48,14 @@
 ## ✦ Установка
 
 1. Скачай **[wxwx-toolkit-setup.exe](https://github.com/ddam1k/wxwx-toolkit/releases/latest/download/wxwx-toolkit-setup.exe)** и запусти.
-   По умолчанию ставится в `C:\Program Files\wxwx toolkit`, папку можно выбрать.
+   Ставится для твоего пользователя без прав администратора (в `%LOCALAPPDATA%\Programs\wxwx toolkit`), папку можно выбрать любую.
 2. Программа без цифровой подписи, поэтому Windows может показать «Windows защитила ваш компьютер».
    Нажми **«Подробнее» → «Выполнить в любом случае»**.
 
 Без установки: `wxwx-toolkit-X.Y.Z-portable.zip` из [Releases](https://github.com/ddam1k/wxwx-toolkit/releases/latest)
 (portable-версия сама не обновляется).
 
-Аддоны и общие программы лежат в `%LOCALAPPDATA%\wxwx-toolkit`: переживают обновления и не требуют прав администратора.
+Настройки, аддоны и общие программы лежат рядом с программой в папке `data` — весь тулкит в одной папке. Они переживают обновления, а при удалении тулкит спросит, удалять ли их.
 
 ## ✦ Аддоны
 

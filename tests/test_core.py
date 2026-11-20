@@ -183,5 +183,56 @@ class MiscTests(unittest.TestCase):
         self.assertEqual(i18n.fmt_size(2048), "2.00 GB")
 
 
+
+class NamingTests(unittest.TestCase):
+    def test_kinds(self):
+        from wxwx_toolkit.core import naming
+        self.assertEqual(naming.resolve("wx"), "_wx")
+        self.assertEqual(naming.resolve("trim"), "_trim")
+        self.assertEqual(naming.resolve("nonsense"), "_wx")
+
+    def test_custom(self):
+        from wxwx_toolkit.core import naming
+        self.assertEqual(naming.resolve("custom", "small"), "_small")
+        self.assertEqual(naming.resolve("custom", "__small "), "_small")
+        self.assertEqual(naming.resolve("custom", "сжато-2"), "_сжато-2")
+        for bad, why in (("", "empty"), ("  _ ", "empty"), ("a/b", "chars"), ("a b", "chars"), ("x" * 17, "long")):
+            self.assertEqual(naming.error(bad), why, bad)
+            self.assertEqual(naming.resolve("custom", bad), "_wx", bad)
+
+    def test_apply(self):
+        from wxwx_toolkit.core import naming
+        self.assertEqual(naming.apply("clip.mp4", "_wx"), "clip_wx.mp4")
+        self.assertEqual(naming.apply("Ranked 2026.11.20 - 21.04.mp4", "_trim"), "Ranked 2026.11.20 - 21.04_trim.mp4")
+        self.assertEqual(naming.apply("noext", "_wx"), "noext_wx")
+
+
+class PathTests(unittest.TestCase):
+    def test_migrate_legacy(self):
+        from wxwx_toolkit.core import paths
+        old, new = Path(tempfile.mkdtemp()), Path(tempfile.mkdtemp())
+        (old / "addons" / "clips").mkdir(parents=True)
+        (old / "addons" / "clips" / "manifest.json").write_text("{}")
+        (old / "components" / "ffmpeg").mkdir(parents=True)
+        (new / "components").mkdir()                      # already there → must not be overwritten
+        (old / "tmp").mkdir()
+        moved = paths.migrate_legacy(new, old)
+        self.assertEqual(moved, ["addons"])
+        self.assertTrue((new / "addons" / "clips" / "manifest.json").is_file())
+        self.assertTrue((old / "components" / "ffmpeg").is_dir())
+        self.assertFalse((new / "tmp").exists())
+        self.assertEqual(paths.migrate_legacy(new, old), [])  # only once
+        shutil.rmtree(old)
+        shutil.rmtree(new)
+
+    def test_writable(self):
+        from wxwx_toolkit.core import paths
+        self.assertTrue(paths.writable(Path(tempfile.mkdtemp()) / "data"))
+
+    def test_install_lang(self):
+        from wxwx_toolkit.core import paths
+        self.assertIn(paths.install_lang(), (None, "ru", "en"))
+
+
 if __name__ == "__main__":
     unittest.main()

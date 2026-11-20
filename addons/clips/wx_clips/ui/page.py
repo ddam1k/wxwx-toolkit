@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QFileDialog, QStackedWidget, QVBoxLayout, QWidget
 from ..core import ffmpeg as ff
 from ..core import library
 from ..core.cache import Cache
-from ..core.encode import out_folder
+from ..core.encode import SUFFIX, out_folder
 from ..core.i18n import fmt_mb, t
 from ..core.session import Clip
 from ..core.settings import BUILTIN_PRESETS, GPU_ENCODERS, EncodeSettings
@@ -430,6 +430,15 @@ class ClipsPage(QWidget):
         if self.use_tk and hasattr(self.host, "folder"):
             return self.host.folder("output")
         return self.own_dir if self.own_mode == "custom" else ""
+
+    def suffix(self) -> str:
+        """The toolkit's (or this add-on's own) suffix — toolkit 1.3+; "_wx" before that."""
+        if hasattr(self.host, "suffix"):
+            try:
+                return self.host.suffix()
+            except Exception:
+                pass
+        return SUFFIX
 
     def folder_for(self, path: str) -> str:
         if self.use_tk and hasattr(self.host, "folder"):

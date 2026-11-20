@@ -157,6 +157,7 @@ jobs:
         shell: pwsh
         timeout-minutes: 10
         run: |
+          $env:WXWX_TOOLKIT_DATA = $null              # 1.3: the installed app must keep its data next to itself
           $v = $env:VERSION
           $dir = "C:\wxtest"
           $silent = '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
@@ -169,15 +170,22 @@ jobs:
           if (-not (Test-Path "$dir\wxwx-toolkit.exe")) { throw "setup: exe missing" }
           Start-Sleep 4
           if (-not (Get-Process wxwx-toolkit -ErrorAction SilentlyContinue)) { throw "app was not started after silent setup" }
+          if (-not (Test-Path "$dir\data\settings.ini")) { throw "1.3: data\settings.ini was not created next to the program" }
+          if (-not (Select-String -Path "$dir\install.ini" -Pattern '^lang=(ru|en)' -Quiet)) { throw "install.ini has no language" }
+          Get-Content "$dir\install.ini"
           New-Item "$dir\_internal\stale-from-old-version.dll" -ItemType File | Out-Null
           Run-Wait "dist/wxwx-toolkit-setup-$v.exe" ($silent + '/CLOSEAPPLICATIONS')
           if (Test-Path "$dir\_internal\stale-from-old-version.dll") { throw "stale file survived the update" }
           Start-Sleep 4
           if (-not (Get-Process wxwx-toolkit -ErrorAction SilentlyContinue)) { throw "app was not restarted after update" }
+          if (-not (Test-Path "$dir\data\settings.ini")) { throw "data did not survive the update" }
           Get-Process wxwx-toolkit -ErrorAction SilentlyContinue | Stop-Process -Force
           Run-Wait "$dir\unins000.exe" $silent
           Start-Sleep 5
           if (Test-Path "$dir\wxwx-toolkit.exe") { throw "uninstall left the exe" }
+          if (Test-Path "$dir\install.ini") { throw "uninstall left install.ini" }
+          if (-not (Test-Path "$dir\data")) { throw "silent uninstall must keep the data (it only asks when not silent)" }
+          Remove-Item $dir -Recurse -Force
           "install / update / uninstall OK"
 
       - uses: actions/upload-artifact@v4

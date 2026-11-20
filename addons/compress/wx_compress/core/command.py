@@ -192,7 +192,8 @@ def estimate_mb(s: EncodeSettings, m: MediaInfo) -> float:
 
 
 # ---------- output path ----------
-def output_path(src: str, fmt: str, out_mode: str = "beside", out_dir: str | None = None) -> str:
+def output_path(src: str, fmt: str, out_mode: str = "beside", out_dir: str | None = None,
+                suffix: str = SUFFIX) -> str:
     sp = Path(src)
     if out_mode == "subfolder":
         folder = sp.parent / "compressed"
@@ -200,7 +201,7 @@ def output_path(src: str, fmt: str, out_mode: str = "beside", out_dir: str | Non
         folder = Path(out_dir)
     else:
         folder = sp.parent
-    stem = sp.stem + SUFFIX
+    stem = sp.stem + (suffix or SUFFIX)
     cand = folder / f"{stem}.{fmt}"
     n = 2
     while cand.exists() or cand.resolve() == sp.resolve():

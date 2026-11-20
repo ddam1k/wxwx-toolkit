@@ -7,7 +7,7 @@ import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 
-from PySide6.QtCore import QObject, QPointF, QSettings, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QLocale, QObject, QPointF, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton,
                                QStackedWidget, QVBoxLayout, QWidget)
@@ -16,19 +16,21 @@ from qframelesswindow import FramelessMainWindow
 from .. import APP_NAME, __version__
 from pathlib import Path
 
-from ..core import addons, components, i18n, presets, updater
+from ..core import addons, components, i18n, naming, presets, updater
 from ..core.addons import CatalogEntry, Manifest
 from ..core.i18n import t
-from ..core.paths import data_dir
+from ..core.paths import data_dir, install_lang
+from .hints import hints
 from .host import Host
 from .pages import AddonSettingsPage, CardModel, ErrorPage, SettingsHub, SettingsPage, StorePage
 from .shell import NavButton, Sidebar
+from .store import store
 from .theme import stylesheet, theme
 from .titlebar import HEIGHT as HEADER_H, HeaderBar
 from .update_bar import UpdateBar
 from .widgets import RevealOverlay, Toast
 
-OPTION_DEFAULTS = {"au_addons": True, "au_new": False, "au_ask": True}
+OPTION_DEFAULTS = {"au_addons": True, "au_new": False, "au_ask": True, "hints": True}
 
 
 class Bridge(QObject):
@@ -54,9 +56,11 @@ class MainWindow(FramelessMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(APP_NAME)
-        self.store = QSettings("wxwx", "toolkit")
+        self.store = store()
         theme.name = "light" if self.store.value("theme", "dark") == "light" else "dark"
-        i18n.set_lang(str(self.store.value("lang", "ru")))
+        i18n.set_lang(self._first_lang())
+        hints.on = self.option("hints")
+        hints.install()
         self.seen = set(filter(None, str(self.store.value("seen_addons", "") or "").split(",")))
 
         self.pool = ThreadPoolExecutor(max_workers=3)
@@ -123,6 +127,38 @@ class MainWindow(FramelessMainWindow):
 
     def set_option(self, key: str, on: bool) -> None:
         self.store.setValue(f"opt/{key}", on)
+
+    def _first_lang(self) -> str:
+        """Saved choice → language picked in the installer → Windows language (Russian or English)."""
+        v = self.store.value("lang")
+        if v in i18n.LANGS:
+            return str(v)
+        lang = install_lang() or ("ru" if QLocale.system().language() == QLocale.Language.Russian else "en")
+        self.store.setValue("lang", lang)
+        return lang
+
+    def tr_migrated(self) -> str:
+        return t("migrated")
+
+    # ---- «Меньше подсказок»
+    def set_hints(self, on: bool) -> None:
+        self.set_option("hints", on)
+        hints.set(on)
+        self.toast.show_text(t("hints_on") if on else t("hints_off"))
+
+    # ---- suffix of finished files
+    def toolkit_suffix_values(self) -> tuple[str, str]:
+        kind = str(self.store.value("file/suffix", naming.DEFAULT) or naming.DEFAULT)
+        return (kind if kind in naming.KINDS else naming.DEFAULT), str(self.store.value("file/suffix_custom", "") or "")
+
+    def toolkit_suffix(self) -> str:
+        return naming.resolve(*self.toolkit_suffix_values())
+
+    def set_toolkit_suffix(self, kind: str, custom: str) -> None:
+        self.store.setValue("file/suffix", kind)
+        self.store.setValue("file/suffix_custom", custom)
+        for h in self.hosts.values():
+            h.suffix_changed.emit(h.suffix())
 
     # ======================================================== layout
     def _build(self):
@@ -201,6 +237,8 @@ class MainWindow(FramelessMainWindow):
         self.settings_page.lang_chosen.connect(self.set_lang)
         self.settings_page.option_changed.connect(self.set_option)
         self.settings_page.folder_change.connect(self.change_folder)
+        self.settings_page.hints_toggled.connect(self.set_hints)
+        self.settings_page.suffix_set.connect(self.set_toolkit_suffix)
         self.settings_hub = SettingsHub(self.settings_page)
         self.pages["store"] = self.store_page
         self.pages["settings"] = self.settings_hub
@@ -332,7 +370,8 @@ class MainWindow(FramelessMainWindow):
         was_current = self.current == m.id
         self._unload_addon(m.id)
         host = Host(m.id, self.toast.show_text, self.folder, self,
-                    installed_fn=lambda a: a in self.installed, open_settings_fn=self.open_addon_settings)
+                    installed_fn=lambda a: a in self.installed, open_settings_fn=self.open_addon_settings,
+                    toolkit_suffix_fn=self.toolkit_suffix)
         title = m.title(i18n.lang())
         settings_widget = None
         if not m.compatible:
@@ -354,6 +393,8 @@ class MainWindow(FramelessMainWindow):
             self.settings_hub.set_addon(m.id, m.icon, page)
             self._retitle_settings()
         self._rebuild_tool_nav()
+        if not hints.on:
+            hints.apply()
         if was_current:                       # hot update while the page was open: show the new one
             self.go(m.id)
 
@@ -766,6 +807,34 @@ class MainWindow(FramelessMainWindow):
                     self.open_addon_settings(aid)
             steps += [tab, (lambda i=addon_zips.index(z): snap(f"_settings_{loaded[i]}")()
                             if i < len(loaded) and loaded[i] in self.settings_hub.pages else None)]
+        def nohints():                        # 1.3: «Меньше подсказок» + a broken custom suffix
+            self.set_lang("ru")
+            self.go("settings")
+            self.settings_hub.open("general")
+            self.set_hints(False)
+            self.set_toolkit_suffix("custom", "sm*")
+            self.settings_page.refresh()
+            if self.toolkit_suffix() != "_wx":
+                self.smoke_errors.append(f"broken custom suffix must fall back to _wx, got {self.toolkit_suffix()}")
+
+        def hints_back():
+            hidden = [w for w in QApplication.allWidgets() if w.property("hint") and w.isVisible()]
+            if hidden:
+                self.smoke_errors.append(f"{len(hidden)} hint widgets still visible in «less hints» mode")
+            self.set_toolkit_suffix("trim", "")
+            self.settings_page.refresh()
+            for aid, h in self.hosts.items():
+                if h.suffix() != "_trim" and not h.get("suffix_own", False):
+                    self.smoke_errors.append(f"{aid}: host.suffix() = {h.suffix()}, expected _trim")
+        steps += [nohints, snap("_settings_nohints"), hints_back, snap("_settings_trim")]
+        for z in addon_zips:
+            def tab2(i=addon_zips.index(z)):
+                aid = loaded[i] if i < len(loaded) else None
+                if aid and aid in self.settings_hub.pages:
+                    self.open_addon_settings(aid)
+            steps += [tab2, (lambda i=addon_zips.index(z): snap(f"_settings_{loaded[i]}_nohints")()
+                             if i < len(loaded) and loaded[i] in self.settings_hub.pages else None)]
+        steps += [lambda: self.set_hints(True), lambda: self.set_toolkit_suffix("wx", "")]
         steps += [lambda: self.go("store"), lambda: self.load_catalog(manual=True), self.on_theme, snap("_light")]
         if addon_zips:
             steps += [lambda: self.go(loaded[0]), snap("_addon_en_light")]

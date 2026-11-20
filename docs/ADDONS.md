@@ -1,7 +1,7 @@
 # Как сделать аддон для wxwx toolkit
 
 Аддон — это zip с `manifest.json` и Python-пакетом. Тулкит скачивает его, распаковывает в
-`%LOCALAPPDATA%\wxwx-toolkit\addons\<id>\` и показывает его виджет как отдельный инструмент в левом меню.
+`<папка тулкита>\data\addons\<id>\` (до 1.3 — `%LOCALAPPDATA%\wxwx-toolkit\addons\<id>\`) и показывает его виджет как отдельный инструмент в левом меню.
 
 Готовый пример: [`examples/hello-addon`](../examples/hello-addon).
 
@@ -61,6 +61,13 @@ host.get("presets", [], addon="compress")         # прочитать наст�
 host.installed("compress")            # установлен ли другой аддон (1.2+)
 host.open_settings()                  # открыть вкладку этого аддона в «Настройках» (1.2+)
 host.settings_changed                 # Signal(str key) — после host.set(), страница и вкладка настроек видят друг друга (1.2+)
+host.hints                 # True — подсказки показываются; False — включено «Меньше подсказок» (1.3+)
+host.hints_changed         # Signal(bool) (1.3+)
+host.hint(label, ...)      # пометить пояснения: в режиме «Меньше подсказок» тулкит их спрячет (1.3+)
+                           # то же самое: label.setProperty("hint", True)
+host.suffix()              # "_wx": суффикс готового файла — общий тулкита или свой у аддона (1.3+)
+host.suffix_changed        # Signal(str) (1.3+)
+host.suffix_widget("clip.mp4")  # готовый блок для вкладки настроек: «Как в настройках тулкита» или свой (1.3+)
 host.data_dir              # pathlib.Path для своих файлов
 host.toolkit_version       # "1.0.0"
 host.api_version           # 1

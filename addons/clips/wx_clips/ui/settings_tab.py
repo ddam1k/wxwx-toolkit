@@ -20,6 +20,9 @@ class SettingsTab(QWidget):
         self.host = host
         self.setObjectName("clipsSettings")
         self.cache = Cache(host.data_dir)
+        self.segs_note = None
+        if hasattr(host, "suffix_changed"):
+            host.suffix_changed.connect(self._segs_text)
         self.col = QVBoxLayout(self)
         self.col.setContentsMargins(0, 0, 0, 0)
         self.col.setSpacing(0)
@@ -98,6 +101,14 @@ class SettingsTab(QWidget):
         sw.toggled.connect(lambda on: h.set("def_merge", on))
         self.col.addWidget(sw)
 
+        if hasattr(h, "suffix_widget"):                    # toolkit 1.3+: suffix of finished files
+            self._section(t("s_naming"))
+            self.col.addWidget(h.suffix_widget("Ranked 2026.11.20 - 21.04.12.02.DVR.mp4"))
+            self.col.addSpacing(6)
+            self.segs_note = label("", "note", wrap=True)
+            self.col.addWidget(self.segs_note)
+            self._segs_text()
+
         self._section(t("s_cache"))
         row = QFrame()
         row.setObjectName("destBox")
@@ -117,6 +128,15 @@ class SettingsTab(QWidget):
         rl.addWidget(b)
         self.col.addWidget(row)
         self.apply_theme()
+
+    def _segs_text(self, _s=None):
+        if self.segs_note is None:
+            return
+        try:
+            sfx = self.host.suffix()
+            self.segs_note.setText(t("s_naming_segs", a=f"…{sfx}_1.mp4", b=f"…{sfx}_2.mp4"))
+        except RuntimeError:
+            self.segs_note = None
 
     def _set(self, key, value):
         self.host.set(key, value)

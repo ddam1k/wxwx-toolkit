@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QApplication
 from .core import ffmpeg as ff
 from .core import i18n
 from .ui import theme as theme_mod
+from .ui import widgets as widgets_mod
 
 
 def _prepare(host):
@@ -15,6 +16,7 @@ def _prepare(host):
     if app is not None:
         theme_mod.FONT_FAMILY = app.font().family()
     ff.set_tools(host.component("ffmpeg"), host.component("ffmpeg", "ffprobe"))
+    widgets_mod.set_hints(getattr(host, "hints", True))
 
 
 def create(host):
@@ -33,6 +35,8 @@ def create(host):
 
     host.lang_changed.connect(on_lang)
     host.theme_changed.connect(on_theme)
+    if hasattr(host, "hints_changed"):                 # toolkit 1.3+
+        host.hints_changed.connect(lambda on: widgets_mod.set_hints(on, page))
     return page
 
 
@@ -42,4 +46,6 @@ def settings(host):
     tab = SettingsTab(host)
     host.lang_changed.connect(lambda _l: tab.render())
     host.theme_changed.connect(lambda _n: tab.apply_theme())
+    if hasattr(host, "hints_changed"):
+        host.hints_changed.connect(lambda on: widgets_mod.set_hints(on, tab))
     return tab

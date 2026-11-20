@@ -179,14 +179,15 @@ def estimate(m: MediaInfo, segs: list[tuple[float, float]], tracks: list[int], s
 
 # ---------------------------------------------------------------- the plan
 def plan_clip(m: MediaInfo, segs: list[tuple[float, float]], tracks: list[int], s: EncodeSettings | None,
-              merge: bool, folder: Path, tmp_dir: Path, reserved: set[str] | None = None) -> Plan:
+              merge: bool, folder: Path, tmp_dir: Path, reserved: set[str] | None = None,
+              suffix: str = SUFFIX) -> Plan:
     """segs: (start, end) seconds, sorted; empty = the whole clip. tracks: audio stream indexes to keep
     (mixed into one when re-encoding). s=None: no re-encode (stream copy, cuts land on keyframes)."""
     reserved = reserved if reserved is not None else set()
     segs = [(max(0.0, a), min(m.duration, b)) for a, b in (segs or [(0.0, m.duration)]) if b - a > 0.05]
     segs = segs or [(0.0, m.duration)]
     tracks = [t for t in tracks if 0 <= t < len(m.audio_tracks)]
-    stem = Path(m.path).stem + SUFFIX
+    stem = Path(m.path).stem + (suffix or SUFFIX)
     ext = ("." + s.format) if s else (Path(m.path).suffix.lower() or ".mp4")
     groups = [segs] if (merge or len(segs) == 1) else [[sg] for sg in segs]
 

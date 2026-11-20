@@ -2,6 +2,16 @@
 
 Each section becomes the release notes and the "what's new" tooltip in the update bar.
 
+## 1.3.0
+- Fewer hints: one switch in Settings → General hides the explanations under options, in the toolkit and in every add-on.
+- Finished file suffix: `_wx`, `_trim` or your own, set once for the whole toolkit. Each add-on can keep it or use its own (Video got its own Settings tab for that).
+- Everything in one folder: settings, add-ons and ffmpeg now live next to the program in `data`. The installer no longer needs admin rights and installs for your user (or wherever you pick). Old data is moved over on first start; uninstalling asks whether to delete it.
+- The program starts in the language picked in the installer (or the Windows language for the portable version).
+- Меньше подсказок: один переключатель в «Настройки → Общие» убирает пояснения под пунктами — в тулките и во всех аддонах.
+- Суффикс готовых файлов: `_wx`, `_trim` или свой — один на весь тулкит. В каждом аддоне можно оставить его или поставить свой (у «Видео» ради этого появилась вкладка в настройках).
+- Всё в одной папке: настройки, аддоны и ffmpeg теперь лежат рядом с программой в `data`. Установщику больше не нужны права администратора — ставится для тебя (или куда выберешь). Старые данные переносятся при первом запуске, а при удалении тулкит спросит, удалять ли их.
+- Программа запускается на языке, выбранном в установщике (portable-версия — на языке Windows).
+
 ## 1.2.0
 - "Check for updates" button in Add-ons, plus a quiet re-check every 30 minutes — no restart needed to see new versions.
 - Add-ons update on the fly: the page reloads in place. If an add-on is busy (say, compressing), a silent update waits until it finishes.

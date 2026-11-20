@@ -96,6 +96,12 @@ class PlanTests(unittest.TestCase):
         run_plan(p)
         self.assertTrue(p.outputs[0].endswith(".gif"))
 
+    def test_suffix(self):
+        p = plan_clip(self.m, [(0.5, 2), (4, 5)], [0], self.s("web"), False, self.out, self.tmp, suffix="_trim")
+        self.assertTrue(all("_trim_" in Path(o).stem for o in p.outputs), p.outputs)
+        q = plan_clip(self.m, [], [0], self.s("web"), True, self.out, self.tmp, suffix="_small")
+        self.assertTrue(Path(q.outputs[0]).stem.endswith("_small"), q.outputs)
+
     def test_names_never_clash(self):
         a = plan_clip(self.m, [], [0], self.s("telegram"), True, self.out, self.tmp, reserved := set())
         b = plan_clip(self.m, [], [0], self.s("telegram"), True, self.out, self.tmp, reserved)

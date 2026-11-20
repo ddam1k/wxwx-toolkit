@@ -138,6 +138,14 @@ QMenu::item { padding: 7px 18px; border-radius: 6px; color: $text; }
 QMenu::item:selected { background: $panel2; }
 QToolTip { background: $ink; color: $on_ink; border: none; padding: 5px 8px; border-radius: 6px; }
 QDialog, QMessageBox, QInputDialog { background: $panel; }
+#sfxBox { background: $panel2; border: 1px solid transparent; border-radius: 10px; }
+#sfxBox[bad="true"] { border: 1px solid #d0806a; }
+#sfxUnder { color: $faint; font-family: "$mono"; font-size: 10.5pt; font-weight: 700; }
+QLineEdit#sfxEdit { background: transparent; border: none; padding: 0; font-family: "$mono"; font-size: 10.5pt;
+    font-weight: 700; color: $text; }
+#sfxErr { color: #d0806a; font-size: 8.6pt; font-weight: 600; }
+#sfxPrev { background: $panel; border: 1px solid $line; border-radius: 10px; padding: 9px 11px;
+    font-family: "$mono"; font-size: 8.6pt; color: $muted; }
 QLineEdit { background: $win; border: 1px solid $line2; border-radius: 8px; padding: 6px 8px; color: $text; }
 QDialog QPushButton, QMessageBox QPushButton {
     background: $panel2; border: 1px solid $line2; border-radius: 8px; padding: 6px 16px; color: $text; min-width: 70px;

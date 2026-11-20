@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QApplication
 from .core import ffmpeg as ff
 from .core import i18n
 from .ui import theme as theme_mod
+from .ui import widgets as widgets_mod
 from .ui.panel import CompressorPanel, Env
 
 
@@ -33,6 +34,14 @@ class HostEnv(Env):
             return self.host.folder("output")
         return None
 
+    def suffix(self):
+        if hasattr(self.host, "suffix"):           # toolkit 1.3+: shared or own suffix
+            try:
+                return self.host.suffix()
+            except Exception:
+                pass
+        return super().suffix()
+
 
 def _sync_tools(host):
     ff.set_tools(host.component("ffmpeg"), host.component("ffmpeg", "ffprobe"))
@@ -45,6 +54,7 @@ def create(host):
     if app is not None:
         theme_mod.FONT_FAMILY = app.font().family()
     _sync_tools(host)
+    widgets_mod.set_hints(getattr(host, "hints", True))
 
     panel = CompressorPanel(HostEnv(host))
 
@@ -64,4 +74,28 @@ def create(host):
         host.folders_changed.connect(lambda _kind: panel.render())
     if hasattr(host, "preset_received"):
         host.preset_received.connect(panel.import_preset)
+    if hasattr(host, "hints_changed"):                 # toolkit 1.3+
+        host.hints_changed.connect(lambda on: widgets_mod.set_hints(on, panel))
+    if hasattr(host, "suffix_changed"):
+        host.suffix_changed.connect(lambda _s: panel.render())
     return panel
+
+
+def settings(host):
+    """Settings tab (toolkit 1.3+): the suffix of finished files. Older toolkits get no tab."""
+    if not hasattr(host, "suffix_widget"):
+        return None
+    from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+    i18n.set_lang(host.lang)
+    w = QWidget()
+    lay = QVBoxLayout(w)
+    lay.setContentsMargins(0, 0, 0, 0)
+    lay.setSpacing(0)
+    lay.addSpacing(24)
+    sec = QLabel(i18n.t("s_naming"))
+    sec.setObjectName("section")
+    lay.addWidget(sec)
+    lay.addSpacing(10)
+    lay.addWidget(host.suffix_widget("gameplay_2026-11-12.mp4"))
+    host.lang_changed.connect(lambda _l: sec.setText(i18n.t("s_naming")))
+    return w

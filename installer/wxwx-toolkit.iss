@@ -1,6 +1,9 @@
 ; Inno Setup 6 script:  ISCC /DAppVersion=1.0.0 installer\wxwx-toolkit.iss
 ; The same installer is used for first install and for self-updates (silently over the old install).
-; Add-ons and shared tools (ffmpeg, yt-dlp) live in %LOCALAPPDATA%\wxwx-toolkit and survive updates.
+; 1.3+: installs without admin rights into the user's own Programs folder (or wherever the user picks).
+; Settings, add-ons and shared tools (ffmpeg, yt-dlp) live next to the program in {app}\data and survive
+; updates. An old install in Program Files keeps its mode (UsePreviousPrivileges) and its data stays in
+; %LOCALAPPDATA%\wxwx-toolkit, because the program can't write into Program Files.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -23,7 +26,9 @@ DefaultGroupName=wxwx toolkit
 DisableProgramGroupPage=yes
 UsePreviousAppDir=yes
 DisableDirPage=auto
-PrivilegesRequired=admin
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog commandline
+UsePreviousPrivileges=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
@@ -42,6 +47,10 @@ ChangesAssociations=yes
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "en"; MessagesFile: "compiler:Default.isl"
 
+[CustomMessages]
+ru.DeleteData=Удалить и настройки, аддоны и скачанные компоненты (ffmpeg и др.)?%n%nОни лежат в папке:%n%1
+en.DeleteData=Also delete settings, add-ons and downloaded tools (ffmpeg etc.)?%n%nThey are in:%n%1
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
@@ -51,6 +60,10 @@ Type: filesandordirs; Name: "{app}\_internal"
 [Files]
 Source: "{#SrcDir}\{#ExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SrcDir}\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[INI]
+; the program starts in the language picked here (until it is changed in Settings)
+Filename: "{app}\install.ini"; Section: "install"; Key: "lang"; String: "{language}"
 
 [Registry]
 ; .wtp = wxwx toolkit preset: double-click opens the toolkit and hands the preset to its add-on
@@ -69,3 +82,19 @@ Filename: "{app}\{#ExeName}"; Flags: nowait skipifnotsilent runasoriginaluser
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\_internal"
+Type: files; Name: "{app}\install.ini"
+
+[Code]
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Data: String;
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    Data := ExpandConstant('{app}\data');
+    if DirExists(Data) and not UninstallSilent() then
+      if MsgBox(FmtMessage(CustomMessage('DeleteData'), [Data]), mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+        DelTree(Data, True, True, True);
+    RemoveDir(ExpandConstant('{app}'));
+  end;
+end;

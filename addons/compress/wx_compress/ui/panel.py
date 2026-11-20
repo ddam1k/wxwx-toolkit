@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (QFileDialog, QFrame, QHBoxLayout, QInputDialog, Q
 from .. import __version__
 from ..core import ffmpeg as ff
 from ..core import presets as wtp
-from ..core.command import build_args, estimate_mb, output_path, preview, quality_value, quality_word
+from ..core.command import SUFFIX, build_args, estimate_mb, output_path, preview, quality_value, quality_word
 from ..core.i18n import files_word, fmt_mb, lang, t
 from ..core.runner import EncodeJob
 from ..core.settings import (BUILTIN_PRESETS, CODECS, CPU_ENCODERS, FPS_STEPS, GPU_ENCODERS, RESOLUTIONS,
@@ -53,6 +53,9 @@ class Env:
     def toolkit_folder(self) -> str | None:
         return None
 
+    def suffix(self) -> str:
+        return SUFFIX
+
 
 @dataclass
 class Item:
@@ -76,6 +79,8 @@ def _label(text: str, name: str, wrap: bool = False) -> QLabel:
     lbl = QLabel(text)
     lbl.setObjectName(name)
     lbl.setWordWrap(wrap)
+    if name == "note":
+        lbl.setProperty("hint", True)    # hidden in «Меньше подсказок» mode (toolkit 1.3+)
     return lbl
 
 
@@ -792,7 +797,7 @@ class CompressorPanel(QWidget):
         self.seg_out.set_value(self.own_mode)
         it = next((i for i in self.items if i.media), None)
         sample = it.media.path if it else str(Path.home() / "Videos" / "clip.mp4")
-        ex = output_path(sample, self.s.format, "beside" if mode == "toolkit" else mode, d)
+        ex = output_path(sample, self.s.format, "beside" if mode == "toolkit" else mode, d, self.env.suffix())
         if mode == "toolkit":
             big, small, short = d or "—", t("d_tk_s"), d or "—"
         elif mode == "beside":
@@ -919,7 +924,7 @@ class CompressorPanel(QWidget):
         self._render_dest()
         m = self._sample_media()
         mode, d = self.effective_dest()
-        out = output_path(m.path, s.format, mode, d) if self.items else f"input_wx.{s.format}"
+        out = output_path(m.path, s.format, mode, d, self.env.suffix()) if self.items else f"input{self.env.suffix()}.{s.format}"
         self.cmd.setPlainText(preview(build_args(s, m, out)))
         self.go.setEnabled(self.running or any(i.media for i in self.items))
         self.clear_btn.setEnabled(bool(self.items))
@@ -1059,7 +1064,7 @@ class CompressorPanel(QWidget):
         if it is None:
             return self._finish()
         mode, d = self.effective_dest()
-        out = output_path(it.media.path, self.run_settings.format, mode, d)
+        out = output_path(it.media.path, self.run_settings.format, mode, d, self.env.suffix())
         it.status = "work"
         it.out_path = out
         it.widget.set_state("work", t("st_start"), 0)

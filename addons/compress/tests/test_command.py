@@ -82,6 +82,11 @@ class EncodeTests(unittest.TestCase):
                 info = ff.probe(out)
                 self.assertEqual(info.acodec is None, audio == "none")
 
+    def test_output_path_suffix(self):
+        out = output_path(self.src, "mp4", "custom", self.tmp, "_trim")
+        self.assertIn("sample clip_trim", os.path.basename(out))
+        self.assertIn("sample clip_wx", os.path.basename(output_path(self.src, "mp4", "custom", self.tmp)))
+
     def test_output_path_never_overwrites_source(self):
         p = output_path(self.src, "mp4")
         self.assertNotEqual(os.path.abspath(p), os.path.abspath(self.src))

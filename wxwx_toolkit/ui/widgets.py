@@ -9,6 +9,7 @@ from PySide6.QtGui import (QColor, QFont, QFontMetricsF, QLinearGradient, QPaint
                            QPixmap)
 from PySide6.QtWidgets import QAbstractButton, QLayout, QSlider, QSizePolicy, QStyle, QWidget
 
+from .hints import hints
 from .theme import HAIR_BLACK, HAIR_WHITE, font, theme
 
 
@@ -237,8 +238,22 @@ class Segmented(QWidget):
         self._anim: QVariantAnimation | None = None
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedHeight(48 if any(o[2] for o in options) else 36)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._fit()
+        hints.changed.connect(self._on_hints)
+
+    def _subs(self) -> bool:
+        return hints.on and any(o[2] for o in self.options)
+
+    def _fit(self) -> None:
+        self.setFixedHeight(48 if self._subs() else 36)
+
+    def _on_hints(self, _on: bool) -> None:
+        try:
+            self._fit()
+            self.update()
+        except RuntimeError:
+            pass
 
     def value(self) -> str:
         return self._value
@@ -322,7 +337,7 @@ class Segmented(QWidget):
                 col.setAlpha(90)
             p.setPen(col)
             p.setFont(f_title)
-            if sub:
+            if sub and hints.on:
                 top = QRectF(cell.left(), cell.top() + 3, cell.width(), 19)
                 p.drawText(top, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom, title)
                 sc = theme.c("faint")

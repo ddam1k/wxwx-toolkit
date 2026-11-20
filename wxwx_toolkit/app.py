@@ -16,6 +16,7 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication
 
 from . import APP_NAME, __version__
+from .core.paths import migrate_legacy
 from .ui import theme as theme_mod
 from .ui.main_window import MainWindow
 from .ui.widgets import logo_pixmap
@@ -97,8 +98,11 @@ def main(argv: list[str] | None = None) -> int:
         icon.addPixmap(logo_pixmap(s))
     app.setWindowIcon(icon)
 
+    moved = [] if smoke else migrate_legacy()     # 1.3: data moves next to the program, once
     win = MainWindow()
     win.show()
+    if moved:
+        QTimer.singleShot(1200, lambda: win.toast.show_text(win.tr_migrated(), 4500))
     if not smoke:
         win._server = _listen(win)
         if files:

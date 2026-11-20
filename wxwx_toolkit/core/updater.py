@@ -70,5 +70,5 @@ def download(rel: Release, progress=None) -> str:
 
 
 def launch_installer(path: str) -> None:
-    """ShellExecute so Windows can show the UAC prompt (Program Files needs admin)."""
+    """ShellExecute so Windows can show the UAC prompt when an old install lives in Program Files."""
     os.startfile(path, arguments=INSTALLER_ARGS)  # type: ignore[attr-defined]

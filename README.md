@@ -48,14 +48,14 @@ GitHub in a second, weighs a few kilobytes and keeps itself up to date.
 ## ✦ Install
 
 1. Download **[wxwx-toolkit-setup.exe](https://github.com/ddam1k/wxwx-toolkit/releases/latest/download/wxwx-toolkit-setup.exe)** and run it.
-   It installs to `C:\Program Files\wxwx toolkit` by default; you can pick another folder.
+   It installs for your user without admin rights (to `%LOCALAPPDATA%\Programs\wxwx toolkit`); you can pick any other folder.
 2. The app isn't code-signed, so Windows may say *"Windows protected your PC"*.
    Click **More info → Run anyway**.
 
 Prefer no installer? Grab `wxwx-toolkit-X.Y.Z-portable.zip` from [Releases](https://github.com/ddam1k/wxwx-toolkit/releases/latest)
 (the portable version doesn't update itself).
 
-Add-ons and shared tools live in `%LOCALAPPDATA%\wxwx-toolkit`. They survive updates and need no admin rights.
+Settings, add-ons and shared tools live next to the program in the `data` folder, so the whole toolkit is one folder. They survive updates; when you uninstall, you're asked whether to delete them.
 
 ## ✦ Add-ons
 

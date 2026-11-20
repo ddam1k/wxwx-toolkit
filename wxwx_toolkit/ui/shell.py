@@ -8,6 +8,7 @@ from PySide6.QtGui import QColor, QFont, QImage, QLinearGradient, QPainter, QPai
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from .hints import mark as mark_hint
 from .theme import HAIR_BLACK, HAIR_WHITE, font, theme
 from .widgets import animate, mix
 
@@ -442,6 +443,8 @@ class SwitchRow(QWidget):
         self.title.setObjectName("rowTitle")
         self.sub = QLabel()
         self.sub.setObjectName("rowSub")
+        self.sub.setWordWrap(True)
+        mark_hint(self.sub)
         txt.addWidget(self.title)
         txt.addWidget(self.sub)
         lay.addLayout(txt, 1)
