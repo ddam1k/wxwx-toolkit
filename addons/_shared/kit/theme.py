@@ -1,6 +1,6 @@
 """Colors for the black/white themes and the Qt stylesheet built from them (wxwx kit).
 
-An add-on adds its own rules with  add_qss(r"""#myThing { color: $muted; }""")  — same $palette
+An add-on adds its own rules with  add_qss("#myThing { color: $muted; }")  — same $palette
 variables as the base stylesheet. set_font() swaps the UI font (the toolkit passes its own)."""
 from __future__ import annotations
 
