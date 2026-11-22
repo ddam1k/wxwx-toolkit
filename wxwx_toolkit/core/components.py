@@ -79,11 +79,11 @@ DENO_ASSET = "deno-x86_64-pc-windows-msvc.zip"
 # ---------------------------------------------------------------- download sources
 BTBN = "BtbN/FFmpeg-Builds"
 # a stable branch first: master builds need a very new NVIDIA driver for NVENC
-# «latest» names live in the rolling «latest» release; dated autobuild releases name the same builds
-# «ffmpeg-n7.1-153-g1a2b3c4d5e-win64-gpl-7.1.zip» / «ffmpeg-N-121234-g1a2b3c4d5e-win64-gpl.zip»
-_BUILD = r"(?:latest|\d+-g[0-9a-f]+)"
-FFMPEG_PATTERNS = [rf"^ffmpeg-n7\.1-{_BUILD}-win64-gpl-7\.1\.zip$", rf"^ffmpeg-n8\.0-{_BUILD}-win64-gpl-8\.0\.zip$",
-                   rf"^ffmpeg-n\d+\.\d+-{_BUILD}-win64-gpl-\d+\.\d+\.zip$",
+# «latest» names live in the rolling «latest» release; dated autobuild releases name the same builds with the
+# full version and commit: «ffmpeg-n8.1.3-39-g660b5aa7db-win64-gpl-8.1.zip» / «ffmpeg-N-129219-g359c825152-win64-gpl.zip»
+_BUILD = r"(?:-latest|(?:\.\d+)?-\d+-g[0-9a-f]+)"
+FFMPEG_PATTERNS = [rf"^ffmpeg-n7\.1{_BUILD}-win64-gpl-7\.1\.zip$", rf"^ffmpeg-n8\.0{_BUILD}-win64-gpl-8\.0\.zip$",
+                   rf"^ffmpeg-n\d+\.\d+{_BUILD}-win64-gpl-\d+\.\d+\.zip$",
                    r"^ffmpeg-(?:master-latest|N-\d+-g[0-9a-f]+)-win64-gpl\.zip$"]
 
 

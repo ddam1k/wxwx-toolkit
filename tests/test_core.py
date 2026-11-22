@@ -172,14 +172,16 @@ class MiscTests(unittest.TestCase):
         self.assertEqual(components.pick_ffmpeg_asset([{"name": names[0]}])["name"], names[0])
 
     def test_ffmpeg_dated_names(self):
-        names = ["ffmpeg-N-121956-g3c2e3b4f5a-win64-gpl.zip", "ffmpeg-n8.0-48-g9a8b7c6d5e-win64-gpl-8.0.zip",
-                 "ffmpeg-n8.0-48-g9a8b7c6d5e-win64-gpl-shared-8.0.zip", "ffmpeg-n7.1-212-g0f1e2d3c4b-win64-lgpl-7.1.zip"]
-        self.assertEqual(components.pick_ffmpeg_asset([{"name": n} for n in names])["name"], names[1])
+        # real names from autobuild-2026-11-22-12-36
+        names = ["ffmpeg-N-129219-g359c825152-win64-gpl-shared.zip", "ffmpeg-N-129219-g359c825152-win64-gpl.zip",
+                 "ffmpeg-n8.1.3-39-g660b5aa7db-win64-gpl-8.1.zip", "ffmpeg-n8.1.3-39-g660b5aa7db-win64-gpl-shared-8.1.zip",
+                 "ffmpeg-n9.0.2-61-gd59078794d-win64-gpl-9.0.zip", "ffmpeg-n9.0.2-61-gd59078794d-win64-lgpl-9.0.zip"]
+        self.assertEqual(components.pick_ffmpeg_asset([{"name": n} for n in names])["name"], names[2])
 
     def test_ffmpeg_fallback_when_latest_is_rebuilt(self):
         import urllib.error
         dated = {"tag_name": "autobuild-2026-11-21-12-50",
-                 "assets": [{"name": "ffmpeg-n7.1-212-g0f1e2d3c4b-win64-gpl-7.1.zip", "browser_download_url": "u"}]}
+                 "assets": [{"name": "ffmpeg-n8.1.3-39-g660b5aa7db-win64-gpl-8.1.zip", "browser_download_url": "u"}]}
         calls = []
 
         def fake(url, *a, **k):
@@ -208,6 +210,7 @@ class MiscTests(unittest.TestCase):
         print("dated ffmpeg:", dated[0].get("tag_name"), hit and hit["name"])
         print("dated win64 gpl:", [a["name"] for a in dated[0].get("assets", []) if "win64-gpl" in a["name"]])
         self.assertIsNotNone(hit, [a["name"] for a in dated[0].get("assets", []) if "win64-gpl" in a["name"]])
+        self.assertNotIn("-N-", hit["name"], "fell back to a master build — needs a very new NVIDIA driver")
 
     def test_i18n(self):
         for lang in i18n.LANGS:
