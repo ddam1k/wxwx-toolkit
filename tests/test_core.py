@@ -206,6 +206,7 @@ class MiscTests(unittest.TestCase):
         self.assertTrue(dated, "no dated releases")
         hit = components.pick_ffmpeg_asset(dated[0].get("assets", []))
         print("dated ffmpeg:", dated[0].get("tag_name"), hit and hit["name"])
+        print("dated win64 gpl:", [a["name"] for a in dated[0].get("assets", []) if "win64-gpl" in a["name"]])
         self.assertIsNotNone(hit, [a["name"] for a in dated[0].get("assets", []) if "win64-gpl" in a["name"]])
 
     def test_i18n(self):
