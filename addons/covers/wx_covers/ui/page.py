@@ -163,6 +163,7 @@ class CoversPage(QWidget):
 
     def apply_theme(self):
         self.setStyleSheet(stylesheet())
+        self.panel.recolor()
         self.update()
 
     # ======================================================== pictures for rows / preview

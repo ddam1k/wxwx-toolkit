@@ -4,6 +4,7 @@ from __future__ import annotations
 import html
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QLineEdit, QPushButton,
                                QVBoxLayout, QWidget)
 
@@ -12,6 +13,7 @@ from ..core.i18n import files, fmt_size, t, tracks
 from ..core.model import Item
 from ..kit.common import SmoothScroll, button, label
 from .art import BigCover
+from .theme import theme
 from .widgets import Chip, IconBadge, ProgressButton, SectionHeader, Segmented, SwitchRow
 
 
@@ -80,7 +82,7 @@ class CoverPanel(QWidget):
         row.addWidget(self.big)
         col = QVBoxLayout()
         col.setSpacing(8)
-        self.pick_btn = button("", "destBtn")
+        self.pick_btn = button("", "ghost")
         self.pick_btn.clicked.connect(self.pick_image)
         col.addWidget(self.pick_btn)
         self.cv_hint = label("", "cvHint", wrap=True)
@@ -147,6 +149,7 @@ class CoverPanel(QWidget):
             r, c = {"title": (0, 0), "artist": (1, 0), "album": (1, 1), "year": (2, 0)}[k]
             grid.addLayout(box, r, c, 1, span)
         lay.addLayout(grid)
+        self.recolor()
         self.guess_btn = button("", "destBtn")
         self.guess_btn.clicked.connect(self._guess)
         lay.addWidget(self.guess_btn)
@@ -216,6 +219,13 @@ class CoverPanel(QWidget):
         fv.addLayout(st)
         outer.addWidget(footer)
 
+    def recolor(self):
+        """Placeholders are dim, so an empty field doesn't look filled in (palette, QSS can't do it)."""
+        for e in self.edits.values():
+            pal = e.palette()
+            pal.setColor(QPalette.ColorRole.PlaceholderText, theme.c("faint"))
+            e.setPalette(pal)
+
     def resizeEvent(self, e):
         super().resizeEvent(e)
         self.idle.setGeometry(0, 0, self.width(), self.scroll.height())
@@ -281,7 +291,7 @@ class CoverPanel(QWidget):
     def refresh(self):
         s = self.items
         on = bool(s)
-        self.fade.setOpacity(1.0 if on else 0.28)
+        self.fade.setOpacity(1.0 if on else 0.14)
         self.body.setEnabled(on)
         self.idle.setVisible(not on)
         self.big.set_items(s)
@@ -294,9 +304,8 @@ class CoverPanel(QWidget):
             pad = model.same(wide, lambda i: i.pad)
             self.pads.setVisible(fit == "fit")
             for k, c in self.pad_chips.items():
-                c.blockSignals(True)
-                c.setChecked(k == pad)
-                c.blockSignals(False)
+                if c.isChecked() != (k == pad):         # toggled drives the chip's look; clicked does the work
+                    c.setChecked(k == pad)
         self.seg_size.set_value(str(self.opt("size", "1000")), animated=False)
         many = len(s) > 1
         for k, e in self.edits.items():

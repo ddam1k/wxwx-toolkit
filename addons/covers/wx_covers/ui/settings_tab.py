@@ -74,3 +74,4 @@ class SettingsTab(QWidget):
         self._section(t("s_from"))
         self.col.addWidget(label(t("s_from_note"), "note", wrap=True))
         self.col.addSpacing(16)
+        self.col.addStretch(1)
