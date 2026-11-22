@@ -13,7 +13,7 @@ from PySide6.QtGui import QGuiApplication, QImage, QKeySequence, QPixmap, QShort
 from PySide6.QtWidgets import QFileDialog, QFrame, QHBoxLayout, QVBoxLayout, QWidget
 
 from ..core import audio, model
-from ..core.i18n import files, t, tracks
+from ..core.i18n import files, t, tracks, tracks_of
 from ..core.model import Item
 from ..kit.common import Loader, SmoothScroll, button, label
 from .art import CheckAll, TrackRow
@@ -375,7 +375,7 @@ class CoversPage(QWidget):
         self.panel.refresh()
         self._repaint_rows()
         if not quiet:
-            self.host.toast(t("cover_for", n=tracks(len(targets))))
+            self.host.toast(t("cover_for", n=tracks_of(len(targets))))
         return True
 
     def paste(self):

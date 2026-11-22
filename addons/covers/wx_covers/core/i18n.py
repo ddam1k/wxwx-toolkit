@@ -30,6 +30,11 @@ def tracks(n: int) -> str:
     return f"{n} " + (plural(n, "трек", "трека", "треков") if _lang == "ru" else plural(n, "track", "tracks", "tracks"))
 
 
+def tracks_of(n: int) -> str:
+    """«для 1 трека / 5 треков» — after «для»."""
+    return f"{n} " + (plural(n, "трека", "треков", "треков") if _lang == "ru" else plural(n, "track", "tracks", "tracks"))
+
+
 def files(n: int) -> str:
     return f"{n} " + (plural(n, "файл", "файла", "файлов") if _lang == "ru" else plural(n, "file", "files", "files"))
 

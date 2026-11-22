@@ -87,7 +87,9 @@ def draw_check(p: QPainter, box: QRectF, state: int, dpr: float) -> None:
         pm = icon_pixmap("check", theme.c("on_ink"), 12, dpr)
         p.drawPixmap(QRectF(box.x() + 3, box.y() + 3, 12, 12), pm, QRectF(pm.rect()))
     elif state == 2:
-        p.setPen(QPen(theme.c("on_ink"), 2, cap=Qt.PenCapStyle.RoundCap))
+        pen = QPen(theme.c("on_ink"), 2)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        p.setPen(pen)
         p.drawLine(QPointF(box.x() + 5, box.center().y()), QPointF(box.right() - 5, box.center().y()))
 
 
