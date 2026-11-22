@@ -171,6 +171,33 @@ class MiscTests(unittest.TestCase):
                          "ffmpeg-n8.1-latest-win64-gpl-8.1.zip")
         self.assertEqual(components.pick_ffmpeg_asset([{"name": names[0]}])["name"], names[0])
 
+    def test_ffmpeg_dated_names(self):
+        names = ["ffmpeg-N-121956-g3c2e3b4f5a-win64-gpl.zip", "ffmpeg-n8.0-48-g9a8b7c6d5e-win64-gpl-8.0.zip",
+                 "ffmpeg-n8.0-48-g9a8b7c6d5e-win64-gpl-shared-8.0.zip", "ffmpeg-n7.1-212-g0f1e2d3c4b-win64-lgpl-7.1.zip"]
+        self.assertEqual(components.pick_ffmpeg_asset([{"name": n} for n in names])["name"], names[1])
+
+    def test_ffmpeg_fallback_when_latest_is_rebuilt(self):
+        import urllib.error
+        dated = {"tag_name": "autobuild-2026-11-21-12-50",
+                 "assets": [{"name": "ffmpeg-n7.1-212-g0f1e2d3c4b-win64-gpl-7.1.zip", "browser_download_url": "u"}]}
+        calls = []
+
+        def fake(url, *a, **k):
+            calls.append(url)
+            if url.endswith("/tags/latest"):
+                raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+            return [{"draft": True, "assets": dated["assets"]}, {"tag_name": "empty", "assets": []}, dated]
+        old = components.net.get_json
+        components.net.get_json = fake
+        try:
+            self.assertEqual(components.ffmpeg_asset()["name"], dated["assets"][0]["name"])
+            components.net.get_json = lambda url, *a, **k: {"assets": []} if "latest" in url else []
+            with self.assertRaises(RuntimeError):
+                components.ffmpeg_asset()
+        finally:
+            components.net.get_json = old
+        self.assertEqual(len(calls), 2)
+
     def test_i18n(self):
         for lang in i18n.LANGS:
             i18n.set_lang(lang)

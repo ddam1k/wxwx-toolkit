@@ -79,8 +79,12 @@ DENO_ASSET = "deno-x86_64-pc-windows-msvc.zip"
 # ---------------------------------------------------------------- download sources
 BTBN = "BtbN/FFmpeg-Builds"
 # a stable branch first: master builds need a very new NVIDIA driver for NVENC
-FFMPEG_PATTERNS = [r"^ffmpeg-n7\.1-latest-win64-gpl-7\.1\.zip$", r"^ffmpeg-n8\.0-latest-win64-gpl-8\.0\.zip$",
-                   r"^ffmpeg-n\d+\.\d+-latest-win64-gpl-\d+\.\d+\.zip$", r"^ffmpeg-master-latest-win64-gpl\.zip$"]
+# «latest» names live in the rolling «latest» release; dated autobuild releases name the same builds
+# «ffmpeg-n7.1-153-g1a2b3c4d5e-win64-gpl-7.1.zip» / «ffmpeg-N-121234-g1a2b3c4d5e-win64-gpl.zip»
+_BUILD = r"(?:latest|\d+-g[0-9a-f]+)"
+FFMPEG_PATTERNS = [rf"^ffmpeg-n7\.1-{_BUILD}-win64-gpl-7\.1\.zip$", rf"^ffmpeg-n8\.0-{_BUILD}-win64-gpl-8\.0\.zip$",
+                   rf"^ffmpeg-n\d+\.\d+-{_BUILD}-win64-gpl-\d+\.\d+\.zip$",
+                   r"^ffmpeg-(?:master-latest|N-\d+-g[0-9a-f]+)-win64-gpl\.zip$"]
 
 
 def pick_ffmpeg_asset(assets: list[dict]) -> dict | None:
@@ -89,6 +93,29 @@ def pick_ffmpeg_asset(assets: list[dict]) -> dict | None:
         if hits:
             return hits[0]
     return None
+
+
+def ffmpeg_asset() -> dict:
+    """The build to download. BtbN re-creates the rolling «latest» release every day, and for a few minutes
+    it answers 404 or has no files — then the newest dated autobuild release is just as good."""
+    first_error = None
+    try:
+        asset = pick_ffmpeg_asset(net.get_json(f"https://api.github.com/repos/{BTBN}/releases/tags/latest").get("assets", []))
+        if asset:
+            return asset
+    except (OSError, ValueError) as e:              # urllib's HTTPError / URLError are OSErrors
+        first_error = e
+    try:
+        releases = net.get_json(f"https://api.github.com/repos/{BTBN}/releases?per_page=10")
+    except (OSError, ValueError) as e:
+        raise RuntimeError(f"ffmpeg builds can't be reached right now: {first_error or e}") from e
+    for rel in releases if isinstance(releases, list) else []:
+        if rel.get("draft"):
+            continue
+        asset = pick_ffmpeg_asset(rel.get("assets", []))
+        if asset:
+            return asset
+    raise RuntimeError("ffmpeg builds are being updated on GitHub — try again in a few minutes")
 
 
 def _write_version(c: Component, version: str) -> None:
@@ -101,10 +128,7 @@ def install(cid: str, progress=None) -> str:
     c.folder().mkdir(parents=True, exist_ok=True)
     tmp = downloads_tmp()
     if cid == "ffmpeg":
-        rel = net.get_json(f"https://api.github.com/repos/{BTBN}/releases/tags/latest")
-        asset = pick_ffmpeg_asset(rel.get("assets", []))
-        if not asset:
-            raise RuntimeError("no ffmpeg build found")
+        asset = ffmpeg_asset()
         zpath = net.download(asset["browser_download_url"], str(tmp / asset["name"]), progress,
                              expected_size=int(asset.get("size") or 0))
         try:

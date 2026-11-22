@@ -2,6 +2,10 @@
 
 Each section becomes the release notes and the "what's new" tooltip in the update bar.
 
+## 1.3.2
+- ffmpeg downloads no longer fail for a few minutes each day while its builds are being refreshed on GitHub: the toolkit takes the newest dated build instead.
+- Скачивание ffmpeg больше не падает на несколько минут в день, пока его сборки обновляются на GitHub: тулкит берёт свежую сборку с датой.
+
 ## 1.3.1
 - Ready for the new Saves add-on: the toolkit can download Deno (yt-dlp needs it for YouTube), and add-ons can hand files to each other — e.g. «Compress» on a finished download opens it in Video.
 - Add-ons share one set of widgets, so the look and the «fewer hints» switch behave the same everywhere.
