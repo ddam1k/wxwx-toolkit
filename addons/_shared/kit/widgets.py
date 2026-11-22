@@ -31,7 +31,18 @@ def set_hints(on: bool, root: QWidget | None = None) -> None:
 
 def animate(owner, start: float, end: float, ms: int, on_value, curve=QEasingCurve.Type.OutCubic,
             on_done=None) -> QVariantAnimation:
+    # a new animation of the same value replaces the running one: two quick toggles must not race
+    # (the older one finishing last would leave a chip lit after it was switched off)
+    key = getattr(on_value, "__func__", on_value)
+    running = owner.__dict__.setdefault("_wx_anims", {}) if hasattr(owner, "__dict__") else {}
+    old = running.get(key)
+    if old is not None:
+        try:
+            old.stop()
+        except RuntimeError:            # already deleted by Qt
+            pass
     a = QVariantAnimation(owner)
+    running[key] = a
     a.setStartValue(float(start))
     a.setEndValue(float(end))
     a.setDuration(ms)
