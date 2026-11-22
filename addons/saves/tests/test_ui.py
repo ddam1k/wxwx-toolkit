@@ -122,7 +122,7 @@ class SavesUiSmoke(unittest.TestCase):
         page.url.blockSignals(False)
         page._site_tag()
         page.cur_url = url
-        page._loaded("probe:" + url, (ytdlp.parse_info(json.dumps(info), url), ""))
+        page._loaded("probe:" + url, (ytdlp.parse_info(json.dumps(info), url), "", ""))
         self.assertEqual(page.state, "video")
         spin(3, lambda: any(f.suffix == ".jpg" for f in (host.data_dir / "thumbs").glob("*")) if (host.data_dir / "thumbs").exists() else False)
         shot("2_video")
@@ -130,7 +130,7 @@ class SavesUiSmoke(unittest.TestCase):
         shot("3_audio")
         page.panel._set_what("video")
 
-        page._loaded("probe:" + url, (None, "ERROR: [youtube] abc123: Sign in to confirm you're not a bot"))
+        page._loaded("probe:" + url, (None, "ERROR: [youtube] abc123: Sign in to confirm you're not a bot", ""))
         self.assertEqual(page.state, "error")
         self.assertEqual(page.err[0], "login")
         shot("4_error")
@@ -140,7 +140,7 @@ class SavesUiSmoke(unittest.TestCase):
         pl = {"_type": "playlist", "id": "PL1", "title": "Референсы ткани", "uploader": "Motion Ref",
               "extractor_key": "YoutubeTab",
               "entries": [{"id": f"v{i}", "title": f"Cloth test #{i}", "duration": 60 + i * 17} for i in range(7)]}
-        page._loaded("probe:" + pl_url, (ytdlp.parse_info(json.dumps(pl), pl_url), ""))
+        page._loaded("probe:" + pl_url, (ytdlp.parse_info(json.dumps(pl), pl_url), "", ""))
         self.assertEqual(page.state, "playlist")
         page._pick(2, False)
         shot("5_playlist")
