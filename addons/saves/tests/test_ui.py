@@ -161,7 +161,10 @@ class SavesUiSmoke(unittest.TestCase):
         self.assertTrue(os.path.isfile(j.path), j.path)
         print("saved:", j.path, j.size)
 
-        # the same link as MP3 — the MP4 already in the folder must stay
+        # the same link as MP3 — the MP4 already in the folder must stay; this one goes through a proxy
+        from miniproxy import MiniProxy
+        px = MiniProxy()
+        host.set("proxy", str(px.port))          # just the port, as people type it
         page.url.setText(f"{base}/Cloth%20sim%20breakdown.mp4")
         self.assertTrue(spin(60, lambda: page.state == "video"))
         page.panel._set_what("audio")
@@ -169,6 +172,8 @@ class SavesUiSmoke(unittest.TestCase):
         self.assertTrue(spin(120, lambda: page.jobs[0].state in ("done", "err")), "mp3 never finished")
         self.assertEqual(page.jobs[0].state, "done", (page.jobs[0].err_kind, page.jobs[0].err_text))
         self.assertTrue(page.jobs[0].path.endswith(".mp3"), page.jobs[0].path)
+        print("through proxy:", px.seen[:4])
+        self.assertTrue(any("Cloth" in ln for ln in px.seen), "yt-dlp did not use the proxy")
         files = sorted(p.name for p in out.rglob("*") if p.is_file())
         print("outputs:", files)
         self.assertEqual(len(files), 2, files)
@@ -202,11 +207,23 @@ class SavesUiSmoke(unittest.TestCase):
         holder.show()
         spin(8, lambda: tab.versions["yt-dlp"] is not None)
         shot("12_settings", holder)
+        tab._proxy_check()                       # the test proxy forwards to the real youtube.com
+        self.assertTrue(spin(40, lambda: tab.px not in ("", "checking")), "proxy check hung")
+        print("proxy check:", tab.px, tab.px_addr)
+        self.assertEqual(tab.px, "ok")
+        self.assertEqual(host.store["proxy"], f"http://127.0.0.1:{px.port}")
+        shot("13_proxy_ok", holder)
+        tab.px_edit.setText("1")
+        tab._proxy_check()
+        self.assertTrue(spin(30, lambda: tab.px not in ("", "checking")))
+        self.assertEqual(tab.px, "port")
+        shot("14_proxy_dead", holder)
         tab._clear_history()
         self.assertTrue(spin(2, lambda: not page.hist.items), "page history not cleared from settings")
 
         page.shutdown()
         srv.shutdown()
+        px.shutdown()
         print("toasts:", host.toasts)
 
 

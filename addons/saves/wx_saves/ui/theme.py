@@ -34,6 +34,8 @@ QLineEdit#search:focus { border: 1px solid $tint; }
 #gone { color: #d0a060; }
 QLineEdit#tEdit { background: $panel2; border: 1px solid transparent; border-radius: 10px; padding: 6px 10px;
     font-family: "$mono"; font-size: 9.6pt; font-weight: 700; color: $text; }
+#pxOk { color: #8fd19e; font-size: 9pt; }
+#pxErr { color: #e59a86; font-size: 9pt; }
 QLineEdit#tEdit:focus { border: 1px solid $tint; }
 #tLbl { color: $faint; font-size: 7.4pt; font-weight: 800; }
 #fnPrev { background: $panel2; border-radius: 10px; padding: 9px 11px; font-family: "$mono"; font-size: 8.6pt; color: $muted; }

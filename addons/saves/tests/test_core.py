@@ -143,6 +143,60 @@ class ParseTests(unittest.TestCase):
         self.assertIn("Private video", ytdlp.last_error("[info] x\nERROR: [youtube] x: Private video\n"))
 
 
+class ProxyTests(unittest.TestCase):
+    def test_addresses(self):
+        from wx_saves.core import proxy
+        self.assertEqual(proxy.candidates("1234"), ["socks5h://127.0.0.1:1234", "http://127.0.0.1:1234"])
+        self.assertEqual(proxy.candidates(" 127.0.0.1:10808 "), ["socks5h://127.0.0.1:10808", "http://127.0.0.1:10808"])
+        self.assertEqual(proxy.candidates("socks5://127.0.0.1:1080"), ["socks5h://127.0.0.1:1080"])
+        self.assertEqual(proxy.candidates("HTTP://u:p@localhost:8080/"), ["http://u:p@localhost:8080"])
+        self.assertEqual(proxy.normalize(""), "")
+        for bad in ("127.0.0.1", "ftp://1.2.3.4:21", "localhost:70000", "привет"):
+            self.assertFalse(proxy.valid(bad), bad)
+        self.assertTrue(proxy.valid(""))
+        self.assertEqual(proxy.check(""), ("off", ""))
+        self.assertEqual(proxy.check("nope")[0], "bad")
+
+    def test_args(self):
+        a = ytdlp.download_args("u", ytdlp.Opts(proxy="socks5h://127.0.0.1:1"))
+        self.assertEqual(a[a.index("--proxy") + 1], "socks5h://127.0.0.1:1")
+        self.assertIn("--proxy", ytdlp.probe_args("u", False, proxy="http://h:1"))
+        self.assertNotIn("--proxy", ytdlp.probe_args("u", False))
+        self.assertEqual(ytdlp.error_kind("ERROR: Unable to connect to proxy"), "network")
+
+
+@unittest.skipUnless(__import__("shutil").which("curl"), "needs curl")
+class ProxyCheckTests(unittest.TestCase):
+    def test_check_through_a_real_proxy(self):
+        import http.server
+        import socket
+        from functools import partial
+        from miniproxy import MiniProxy
+        from wx_saves.core import proxy
+        d = tempfile.mkdtemp()
+        Path(d, "generate_204").write_text("")
+        Path(d, "thumb.jpg").write_bytes(b"\xff\xd8 not really a jpeg")
+        web = http.server.ThreadingHTTPServer(("127.0.0.1", 0), partial(http.server.SimpleHTTPRequestHandler, directory=d))
+        web.handle_error = lambda *_a: None
+        __import__("threading").Thread(target=web.serve_forever, daemon=True).start()
+        target = f"http://127.0.0.1:{web.server_address[1]}/generate_204"
+        px = MiniProxy()
+        # «1234» alone: SOCKS5 fails on an HTTP port, HTTP works → the HTTP address is the one kept
+        self.assertEqual(proxy.check(str(px.port), target=target), ("ok", f"http://127.0.0.1:{px.port}"))
+        self.assertTrue(any("generate_204" in ln for ln in px.seen))
+        self.assertEqual(proxy.check(f"socks5h://127.0.0.1:{px.port}", target=target)[0], "proto")
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        dead = s.getsockname()[1]
+        s.close()
+        self.assertEqual(proxy.check(str(dead), target=target)[0], "port")
+        out = Path(d, "t.bin")
+        self.assertTrue(proxy.fetch(target.replace("generate_204", "thumb.jpg"), str(out), f"http://127.0.0.1:{px.port}"))
+        self.assertTrue(out.read_bytes().startswith(b"\xff\xd8"))
+        web.shutdown()
+        px.shutdown()
+
+
 class MoveOutTests(unittest.TestCase):
     def test_never_overwrites(self):
         from wx_saves.core.files import move_out

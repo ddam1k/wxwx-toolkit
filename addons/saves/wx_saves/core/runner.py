@@ -53,11 +53,11 @@ def run_text(args: list[str], timeout: float = 90) -> tuple[int, str, str]:
     return r.returncode, r.stdout.decode("utf-8", "replace"), r.stderr.decode("utf-8", "replace")
 
 
-def probe(tools: Tools, url: str, playlist: bool, cookies: str = "none") -> tuple[ytdlp.Info | None, str]:
+def probe(tools: Tools, url: str, playlist: bool, cookies: str = "none", proxy: str = "") -> tuple[ytdlp.Info | None, str]:
     """(info, "") or (None, error text)."""
     if not tools.ytdlp:
         return None, "no-yt-dlp"
-    code, out, err = run_text([tools.ytdlp, *ytdlp.probe_args(url, playlist, tools.ffmpeg_dir, tools.deno, cookies)],
+    code, out, err = run_text([tools.ytdlp, *ytdlp.probe_args(url, playlist, tools.ffmpeg_dir, tools.deno, cookies, proxy)],
                               timeout=120)
     if code == 0 and out.strip():
         try:

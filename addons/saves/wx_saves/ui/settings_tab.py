@@ -5,9 +5,9 @@ import threading
 import time
 
 from PySide6.QtCore import QObject, Qt, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLineEdit, QVBoxLayout, QWidget
 
-from ..core import ytdlp
+from ..core import proxy, ytdlp
 from ..core.history import History
 from ..core.i18n import t
 from ..core.runner import run_text
@@ -28,6 +28,8 @@ class SettingsTab(QWidget):
         self.bridge = _Bridge(self)
         self.bridge.done.connect(self._bg_done)
         self.versions = {"yt-dlp": None, "deno": None}
+        self.px = ""                  # "" | checking | ok/port/proto/site/bad/nocurl/off/saved
+        self.px_addr = ""
         self.updating = False
         self.col = QVBoxLayout(self)
         self.col.setContentsMargins(0, 0, 0, 0)
@@ -111,6 +113,9 @@ class SettingsTab(QWidget):
         self._comp_row(t("s_deno", v=d) if d else t("s_deno_none"), t("s_deno_s"))
         self._switch("auto_upd", True, t("s_autoupd"), t("s_autoupd_s"))
 
+        self._section(t("s_proxy"))
+        self._proxy_block()
+
         self._section(t("s_login"))
         self._seg("cookies", "none", [("none", t("c_none"), ""), ("firefox", "Firefox", ""), ("chrome", "Chrome", ""),
                                       ("edge", "Edge", "")])
@@ -171,6 +176,55 @@ class SettingsTab(QWidget):
         self.col.addWidget(w)
         self.col.addSpacing(16)
 
+    # ------------------------------------------------------------ proxy
+    def _proxy_block(self):
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self.px_edit = QLineEdit(str(self.opt("proxy", "") or ""))
+        self.px_edit.setObjectName("tEdit")
+        self.px_edit.setPlaceholderText(t("s_proxy_ph"))
+        self.px_edit.setClearButtonEnabled(True)
+        self.px_edit.editingFinished.connect(self._proxy_typed)
+        self.px_edit.returnPressed.connect(self._proxy_check)
+        row.addWidget(self.px_edit, 1)
+        b = button(t("s_proxy_checking") if self.px == "checking" else t("s_proxy_check"), "destBtn")
+        b.setEnabled(self.px != "checking")
+        b.clicked.connect(self._proxy_check)
+        row.addWidget(b)
+        w = QWidget()
+        w.setLayout(row)
+        self.col.addWidget(w)
+        if self.px and self.px != "checking":
+            st = label(t("px_" + self.px, u=self.px_addr), "pxOk" if self.px in ("ok", "off", "saved") else "pxErr",
+                       wrap=True)
+            self.col.addSpacing(8)
+            self.col.addWidget(st)
+        self.col.addSpacing(10)
+        n = label(t("s_proxy_note"), "note", wrap=True)
+        self.col.addWidget(n)
+
+    def _proxy_typed(self):
+        """Save quietly on focus-out (re-rendering here would swallow a click on «Проверить»)."""
+        text = self.px_edit.text().strip()
+        if proxy.valid(text) and text != str(self.opt("proxy", "") or ""):
+            self.host.set("proxy", text)
+
+    def _proxy_check(self):
+        if self.px == "checking":
+            return
+        text = self.px_edit.text().strip()
+        if not proxy.valid(text):
+            self.px, self.px_addr = "bad", ""
+            self.render()
+            return
+        self.px = "checking"
+        self.render()
+
+        def run():
+            res, addr = proxy.check(text)
+            self.bridge.done.emit("proxy", f"{res}|{addr}|{text}")
+        threading.Thread(target=run, daemon=True).start()
+
     def _name_prev(self):
         sample = {"title": ("", "Cloth simulation breakdown.mp4"),
                   "author": ("Motion Ref Library — ", "Cloth simulation breakdown.mp4"),
@@ -218,7 +272,12 @@ class SettingsTab(QWidget):
         threading.Thread(target=run, daemon=True).start()
 
     def _bg_done(self, what: str, value: str):
-        if what.startswith("ver:"):
+        if what == "proxy":
+            res, addr, typed = value.split("|", 2)
+            self.px, self.px_addr = res, addr
+            # keep what works: «1234» that turned out to be HTTP is saved as «http://127.0.0.1:1234»
+            self.host.set("proxy", addr if res == "ok" else typed)
+        elif what.startswith("ver:"):
             self.versions[what[4:]] = value
         elif what == "updated":
             self.updating = False

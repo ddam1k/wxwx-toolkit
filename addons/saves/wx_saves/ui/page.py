@@ -17,7 +17,7 @@ from PySide6.QtGui import QDesktopServices, QGuiApplication, QKeySequence, QShor
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy, QStackedWidget,
                                QVBoxLayout, QWidget)
 
-from ..core import links, ytdlp
+from ..core import links, proxy, ytdlp
 from ..core.history import History
 from ..core.i18n import files, fmt_size, lang, t
 from ..core.runner import Job, Tools, Worker, probe
@@ -33,9 +33,12 @@ ARATE = {"mp3": 40_000, "m4a": 16_500, "opus": 16_000}
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
 
 
-def fetch(url: str, dest: str) -> str | None:
+def fetch(url: str, dest: str, via: str = "") -> str | None:
     if os.path.isfile(dest) and os.path.getsize(dest) > 0:
         return dest
+    if via:
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        return dest if proxy.fetch(url, dest, via) else None
     try:
         req = urllib.request.Request(url, headers={"User-Agent": UA})
         with urllib.request.urlopen(req, timeout=15) as r:
@@ -109,6 +112,10 @@ class SavesPage(QWidget):
     def opt(self, key: str, default):
         v = self.host.get(key, default)
         return default if v is None else v
+
+    def via(self) -> str:
+        """The proxy address for yt-dlp and thumbnails, "" = direct."""
+        return proxy.normalize(self.opt("proxy", "") or "")
 
     def folder(self) -> str:
         tk = self.host.folder("downloads") if hasattr(self.host, "folder") else ""
@@ -379,7 +386,7 @@ class SavesPage(QWidget):
         self.info = None
         self._set_state("loading")
         pl = links.is_playlist(url)
-        self.loader.submit("probe:" + url, probe, self.tools(), url, pl, self.opt("cookies", "none"))
+        self.loader.submit("probe:" + url, probe, self.tools(), url, pl, self.opt("cookies", "none"), self.via())
 
     def _start_batch(self, ls: list[str]):
         self.cur_url = " ".join(ls)
@@ -388,7 +395,7 @@ class SavesPage(QWidget):
         self._set_state("batch")
         tools = self.tools()
         for i, u in enumerate(ls):
-            self.loader.submit(f"bprobe:{i}:{u}", probe, tools, u, False, self.opt("cookies", "none"))
+            self.loader.submit(f"bprobe:{i}:{u}", probe, tools, u, False, self.opt("cookies", "none"), self.via())
 
     def _loaded(self, key: str, value):
         try:
@@ -445,7 +452,7 @@ class SavesPage(QWidget):
     def _load_thumb(self, url: str, k: str):
         if not url:
             return
-        self.loader.submit("thumb:" + k, fetch, url, self._thumb_file(k))
+        self.loader.submit("thumb:" + k, fetch, url, self._thumb_file(k), self.via())
 
     # ======================================================== clipboard watch
     def _app_state(self, st):
@@ -569,13 +576,13 @@ class SavesPage(QWidget):
         tag.setTextFormat(Qt.TextFormat.RichText)
         col.addWidget(tag)
         col.addWidget(label(t("e_" + kind, site=t("site") if site == "site" else site), "pvTitle"))
-        sub = label(t(f"e_{kind}_s"), "pvErr", wrap=True)
+        sub = label(t("e_network_px_s" if kind == "network" and self.via() else f"e_{kind}_s"), "pvErr", wrap=True)
         sub.setToolTip(text)
         col.addWidget(sub)
         row = QHBoxLayout()
         row.setSpacing(8)
-        if kind in ("login", "cookies"):
-            b = button(t("e_login_btn"), "accent")
+        if kind in ("login", "cookies") or (kind == "network" and not self.via()):
+            b = button(t("e_login_btn") if kind != "network" else t("e_proxy_btn"), "accent")
             b.clicked.connect(self._open_settings)
             row.addWidget(b)
         r = button(t("retry"), "ghost")
@@ -780,7 +787,7 @@ class SavesPage(QWidget):
                 self._url_settled()
             return
         o = self.panel.o
-        base = dataclasses.replace(o, folder=self.folder(), cookies=self.opt("cookies", "none"),
+        base = dataclasses.replace(o, folder=self.folder(), cookies=self.opt("cookies", "none"), proxy=self.via(),
                                    naming=self.opt("naming", "title"), subfolder="")
         new: list[Job] = []
         if st == "video" and self.info:

@@ -35,6 +35,7 @@ class Opts:
     subs: str | None = None          # language code, "auto" → automatic captions
     thumb: bool = False              # the cover as .jpg next to the file
     cookies: str = "none"
+    proxy: str = ""                  # full address from core.proxy.normalize, "" = direct
     naming: str = "title"
     folder: str = ""
     subfolder: str = ""              # e.g. the playlist's name
@@ -65,7 +66,7 @@ class Info:
 
 
 # ---------------------------------------------------------------- command lines
-def _common(ffmpeg_dir: str | None, deno: str | None, cookies: str) -> list[str]:
+def _common(ffmpeg_dir: str | None, deno: str | None, cookies: str, proxy: str = "") -> list[str]:
     a = ["--color", "never", "--ignore-config", "--windows-filenames"]
     if ffmpeg_dir:
         a += ["--ffmpeg-location", ffmpeg_dir]
@@ -73,11 +74,13 @@ def _common(ffmpeg_dir: str | None, deno: str | None, cookies: str) -> list[str]
         a += ["--js-runtimes", f"deno:{deno}"]
     if cookies in COOKIES and cookies != "none":
         a += ["--cookies-from-browser", cookies]
+    if proxy:
+        a += ["--proxy", proxy]
     return a
 
 
-def probe_args(url: str, playlist: bool, ffmpeg_dir=None, deno=None, cookies="none") -> list[str]:
-    a = _common(ffmpeg_dir, deno, cookies) + ["-J", "--skip-download"]
+def probe_args(url: str, playlist: bool, ffmpeg_dir=None, deno=None, cookies="none", proxy="") -> list[str]:
+    a = _common(ffmpeg_dir, deno, cookies, proxy) + ["-J", "--skip-download"]
     a += ["--flat-playlist", "--yes-playlist"] if playlist else ["--no-playlist"]
     return a + ["--", url]
 
@@ -92,7 +95,7 @@ def sort_for(o: Opts) -> str:
 
 
 def download_args(url: str, o: Opts, ffmpeg_dir=None, deno=None) -> list[str]:
-    a = _common(ffmpeg_dir, deno, o.cookies)
+    a = _common(ffmpeg_dir, deno, o.cookies, o.proxy)
     a += ["--no-playlist", "--newline", "--progress", "--no-mtime", "--continue", "--no-overwrites",
           "--progress-template",
           "download:WXP %(progress.downloaded_bytes)s/%(progress.total_bytes)s/%(progress.total_bytes_estimate)s/"
@@ -324,7 +327,8 @@ _ERR = [
                      "does not exist", "not found", "http error 404")),
     ("geo", ("not available in your country", "geo restriction", "geo-restricted")),
     ("unsupported", ("unsupported url",)),
-    ("network", ("unable to download", "getaddrinfo", "timed out", "connection", "http error 5", "ssl")),
+    ("network", ("unable to download", "getaddrinfo", "timed out", "connection", "http error 5", "ssl", "proxy",
+                 "socks", "name resolution", "nodename nor servname")),
     ("ratelimit", ("http error 429", "too many requests")),
 ]
 
