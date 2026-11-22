@@ -36,10 +36,11 @@ class DlRow(QFrame):
     """One download in «Сейчас»."""
     action = Signal(int, str)            # job id, action
 
-    def __init__(self, job: Job, can_send: bool, parent=None):
+    def __init__(self, job: Job, can_send: bool, parent=None, can_cover: bool = False):
         super().__init__(parent)
         self.job = job
-        self.can_send = can_send
+        self.can_send = can_send          # «Видео» is installed → «Сжать» on videos
+        self.can_cover = can_cover        # «Обложки» is installed → «Обложка» on sound
         self.setObjectName("item")
         lay = QHBoxLayout(self)
         lay.setContentsMargins(10, 10, 10, 10)
@@ -75,7 +76,7 @@ class DlRow(QFrame):
         self.btns.setSpacing(2)
         lay.addLayout(self.btns)
         self._buttons: dict[str, IconButton] = {}
-        for key, icon in (("folder", "folder"), ("send", "video"), ("pause", "pause"), ("resume", "play"),
+        for key, icon in (("folder", "folder"), ("send", "video"), ("cover", "music"), ("pause", "pause"), ("resume", "play"),
                           ("retry", "retry"), ("remove", "x")):
             b = IconButton(icon, 28, 14)
             b.clicked.connect(lambda _=False, k=key: self.action.emit(self.job.id, k))
@@ -85,7 +86,8 @@ class DlRow(QFrame):
         self.update_state()
 
     def retranslate(self):
-        tips = {"folder": t("h_file"), "send": t("a_send_tip"), "pause": t("a_pause"), "resume": t("a_resume"),
+        tips = {"folder": t("h_file"), "send": t("a_send_tip"), "cover": t("a_cover_tip"), "pause": t("a_pause"),
+                "resume": t("a_resume"),
                 "retry": t("a_retry"), "remove": t("a_cancel")}
         for k, b in self._buttons.items():
             b.setToolTip(tips[k])
@@ -95,7 +97,8 @@ class DlRow(QFrame):
         st = j.state
         show = {
             "wait": {"remove"}, "work": {"pause", "remove"}, "pause": {"resume", "remove"},
-            "done": {"folder", "remove"} | ({"send"} if self.can_send and j.opts.what == "video" else set()),
+            "done": {"folder", "remove"} | ({"send"} if self.can_send and j.opts.what == "video" else set())
+                    | ({"cover"} if self.can_cover and j.opts.what == "audio" else set()),
             "err": {"retry", "remove"}, "cancel": {"retry", "remove"},
         }[st]
         for k, b in self._buttons.items():

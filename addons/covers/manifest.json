@@ -1,0 +1,14 @@
+{
+  "id": "covers",
+  "name": {"ru": "Обложки", "en": "Covers"},
+  "version": "1.0.0",
+  "description": {
+    "ru": "Картинка и теги для MP3, M4A и FLAC: сразу для многих треков, звук не перекодируется",
+    "en": "Artwork and tags for MP3, M4A and FLAC: many tracks at once, the sound isn't re-encoded"
+  },
+  "entry": "wx_covers.addon:create",
+  "settings": "wx_covers.addon:settings",
+  "icon": "music",
+  "needs": ["ffmpeg"],
+  "min_toolkit": "1.3.1"
+}

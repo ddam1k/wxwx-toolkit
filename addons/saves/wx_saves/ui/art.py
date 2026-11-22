@@ -11,6 +11,7 @@ from .theme import font, theme
 from .widgets import HINTS, ICONS, animate, icon_pixmap, mix
 
 ICONS.update({
+    "music": '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
     "x": '<path d="M6 6l12 12M18 6L6 18"/>',
     "check": '<path d="M5 12.5l4.5 4.5L19 7"/>',
     "play": '<path d="M8 5.5v13l10.5-6.5z"/>',

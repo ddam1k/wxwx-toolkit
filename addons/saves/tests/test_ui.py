@@ -78,7 +78,7 @@ class SavesUiSmoke(unittest.TestCase):
                 self.settings_changed.emit(key)
 
             def installed(self, aid):
-                return aid == "compress"
+                return aid in ("compress", "covers")
 
             def send_to(self, aid, paths):
                 self.sent.append((aid, paths))
@@ -182,6 +182,11 @@ class SavesUiSmoke(unittest.TestCase):
 
         page._row_action(page.jobs[1].id, "send")
         self.assertEqual(host.sent and host.sent[0][0], "compress")
+        mp3_row = page.rows[page.jobs[0].id]
+        self.assertFalse(mp3_row._buttons["cover"].isHidden())          # sound → «Обложка»
+        self.assertTrue(page.rows[page.jobs[1].id]._buttons["cover"].isHidden())
+        page._row_action(page.jobs[0].id, "cover")
+        self.assertEqual(host.sent[-1], ("covers", [page.jobs[0].path]))
 
         page.tabs.select("hist", emit=True)
         self.assertEqual(len(page.hist.items), 2)

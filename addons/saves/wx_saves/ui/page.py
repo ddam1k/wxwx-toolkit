@@ -849,8 +849,8 @@ class SavesPage(QWidget):
         return j
 
     def _add_row(self, j: Job):
-        can_send = bool(hasattr(self.host, "send_to") and hasattr(self.host, "installed") and self.host.installed("compress"))
-        row = DlRow(j, can_send)
+        ok = hasattr(self.host, "send_to") and hasattr(self.host, "installed")
+        row = DlRow(j, bool(ok and self.host.installed("compress")), can_cover=bool(ok and self.host.installed("covers")))
         row.action.connect(self._row_action)
         if j.thumb:
             k = j.key or str(abs(hash(j.url)))
@@ -931,6 +931,9 @@ class SavesPage(QWidget):
         elif action == "send":
             if j.path and self.host.send_to("compress", [j.path]):
                 self.host.toast(t("sent"))
+        elif action == "cover":
+            if j.path and self.host.send_to("covers", [j.path]):
+                self.host.toast(t("sent_cover"))
         elif action == "pause" and w:
             w.stop("pause")
         elif action == "resume":
