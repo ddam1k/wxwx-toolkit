@@ -67,6 +67,18 @@ def probe(tools: Tools, url: str, playlist: bool, cookies: str = "none", proxy: 
     return None, err or out or f"yt-dlp exited with {code}"
 
 
+def probe_via(tools: Tools, url: str, playlist: bool, cookies: str, proxies: list[str]) -> tuple:
+    """probe() trying each proxy address in turn while the failure is a network one.
+    (info, error, the address that answered — "" for direct)."""
+    tries = proxies or [""]
+    info, err = None, ""
+    for i, px in enumerate(tries):
+        info, err = probe(tools, url, playlist, cookies, px)
+        if info is not None or ytdlp.error_kind(err) != "network" or i == len(tries) - 1:
+            return info, err, px
+    return info, err, tries[-1]
+
+
 @dataclass
 class Job:
     """What the list shows. Mutated by the worker thread, read by the GUI on `changed`."""

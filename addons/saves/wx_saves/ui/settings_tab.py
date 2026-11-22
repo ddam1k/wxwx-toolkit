@@ -208,6 +208,8 @@ class SettingsTab(QWidget):
         text = self.px_edit.text().strip()
         if proxy.valid(text) and text != str(self.opt("proxy", "") or ""):
             self.host.set("proxy", text)
+            if text and len(proxy.candidates(text)) > 1:      # no type given → find out which one it is
+                self._proxy_check()
 
     def _proxy_check(self):
         if self.px == "checking":

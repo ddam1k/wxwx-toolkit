@@ -173,6 +173,7 @@ class SavesUiSmoke(unittest.TestCase):
         self.assertEqual(page.jobs[0].state, "done", (page.jobs[0].err_kind, page.jobs[0].err_text))
         self.assertTrue(page.jobs[0].path.endswith(".mp3"), page.jobs[0].path)
         print("through proxy:", px.seen[:4])
+        self.assertEqual(host.store["proxy"], f"http://127.0.0.1:{px.port}")   # SOCKS guess failed → HTTP kept
         self.assertTrue(any("Cloth" in ln for ln in px.seen), "yt-dlp did not use the proxy")
         files = sorted(p.name for p in out.rglob("*") if p.is_file())
         print("outputs:", files)

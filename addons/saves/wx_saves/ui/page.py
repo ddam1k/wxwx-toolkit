@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButt
 from ..core import links, proxy, ytdlp
 from ..core.history import History
 from ..core.i18n import files, fmt_size, lang, t
-from ..core.runner import Job, Tools, Worker, probe
+from ..core.runner import Job, Tools, Worker, probe_via
 from ..kit.common import IconButton, Loader, SmoothScroll, TabRow, button, label, pixmap
 from .art import Picture, Shimmer, site_html
 from .panel import OptionsPanel
@@ -116,6 +116,11 @@ class SavesPage(QWidget):
     def via(self) -> str:
         """The proxy address for yt-dlp and thumbnails, "" = direct."""
         return proxy.normalize(self.opt("proxy", "") or "")
+
+    def _learn_proxy(self, px: str):
+        """«1234» turned out to be an HTTP port → keep «http://127.0.0.1:1234» so downloads use what works."""
+        if px and px != self.via() and px in proxy.candidates(self.opt("proxy", "") or ""):
+            self.host.set("proxy", px)
 
     def folder(self) -> str:
         tk = self.host.folder("downloads") if hasattr(self.host, "folder") else ""
@@ -386,7 +391,8 @@ class SavesPage(QWidget):
         self.info = None
         self._set_state("loading")
         pl = links.is_playlist(url)
-        self.loader.submit("probe:" + url, probe, self.tools(), url, pl, self.opt("cookies", "none"), self.via())
+        self.loader.submit("probe:" + url, probe_via, self.tools(), url, pl, self.opt("cookies", "none"),
+                           proxy.candidates(self.opt("proxy", "") or ""))
 
     def _start_batch(self, ls: list[str]):
         self.cur_url = " ".join(ls)
@@ -395,7 +401,8 @@ class SavesPage(QWidget):
         self._set_state("batch")
         tools = self.tools()
         for i, u in enumerate(ls):
-            self.loader.submit(f"bprobe:{i}:{u}", probe, tools, u, False, self.opt("cookies", "none"), self.via())
+            self.loader.submit(f"bprobe:{i}:{u}", probe_via, tools, u, False, self.opt("cookies", "none"),
+                               proxy.candidates(self.opt("proxy", "") or ""))
 
     def _loaded(self, key: str, value):
         try:
@@ -408,7 +415,8 @@ class SavesPage(QWidget):
             url = key[6:]
             if url != self.cur_url:
                 return
-            info, err = value if value else (None, "error")
+            info, err, px = value if value else (None, "error", "")
+            self._learn_proxy(px)
             if info is None:
                 kind = "tool" if err == "no-yt-dlp" else ytdlp.error_kind(err)
                 self.err = (kind, ytdlp.last_error(err))
@@ -428,7 +436,8 @@ class SavesPage(QWidget):
             i = int(i)
             if self.state != "batch" or i >= len(self.batch) or self.batch[i]["url"] != url:
                 return
-            info, _err = value if value else (None, "")
+            info, _err, px = value if value else (None, "", "")
+            self._learn_proxy(px)
             if info is not None:
                 self.batch[i].update(title=info.title, duration=info.duration, info=info, site=info.site)
                 if info.thumbnail and i == 0:
