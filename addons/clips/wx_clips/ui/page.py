@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QFileDialog, QStackedWidget, QVBoxLayout, QWidget
 
 from ..core import ffmpeg as ff
-from ..core import library
+from ..core import library, trash
 from ..core.cache import Cache
 from ..core.encode import SUFFIX, out_folder
 from ..core.i18n import fmt_mb, t
@@ -21,6 +21,7 @@ from .common import since as since_ts
 from .editor import EditorView
 from .gallery import HomeView
 from .theme import stylesheet
+from .undo import UndoBar
 from .widgets import DropOverlay
 
 VIDEO_EXTS = library.CLIP_EXTS | {".mts", ".m2ts", ".mpg", ".mpeg", ".wmv", ".3gp", ".ogv"}
@@ -45,6 +46,8 @@ class ClipsPage(QWidget):
         self._frames: dict = {}
         self.picks: set[str] = set()
         self.done: set[str] = set(host.get("done", []) or [])
+        self.made: set[str] = set(host.get("made", []) or [])        # files this add-on cut
+        self._stashed: list[tuple[str, str]] = []                    # (aside, original) waiting for «Вернуть»
         self.folders: list = []
         self.new_list: list = []
         self.new_set: set[str] = set()
@@ -68,6 +71,9 @@ class ClipsPage(QWidget):
         self.stack.addWidget(self.editor)
         self.overlay = DropOverlay(self)
         self.overlay.text = t("dropv")
+        self.undo_bar = UndoBar(self)
+        self.undo_bar.undo.connect(self._undo_trash)
+        self.undo_bar.expired.connect(self._flush_trash)
         self.apply_theme()
         if hasattr(host, "settings_changed"):
             host.settings_changed.connect(self._setting)
@@ -76,6 +82,8 @@ class ClipsPage(QWidget):
         self._timer.setInterval(60_000)
         self._timer.timeout.connect(lambda: self.rescan() if self.isVisible() else None)
         self._timer.start()
+        if self.nv_dir:                        # clips put aside when the app closed mid-countdown → to the Bin
+            self.loader.submit("flush", trash.flush_left, self.nv_dir)
         self.rescan()
 
     # ------------------------------------------------ preferences
@@ -126,6 +134,60 @@ class ClipsPage(QWidget):
             self._sig = None
             self.rescan()
         return n
+
+    # ------------------------------------------------ delete one clip (with «Вернуть»)
+    def trash_clip(self, path: str) -> bool:
+        if self.editor.running and any(c.path == path for c in self.clips):
+            return False
+        self._flush_trash()                       # the previous one goes on to the Bin now
+        if any(c.path == path for c in self.clips):
+            self.editor.player.release()          # Windows won't move a file the player holds
+        aside = None
+        for _ in range(5):
+            try:
+                aside = trash.stash(path)
+                break
+            except OSError:
+                time.sleep(0.15)
+        if aside is None:
+            self.toast(t("trash_fail"))
+            return False
+        self._stashed.append((aside, path))
+        self.picks.discard(path)
+        idx = next((i for i, c in enumerate(self.clips) if c.path == path), -1)
+        if idx >= 0:
+            self.editor.drop_clip(idx)
+        self._sig = None
+        self._drop_from_library(path)
+        self.undo_bar.show_text(t("trash_one", n=os.path.basename(path)[:48]))
+        return True
+
+    def _drop_from_library(self, path: str):
+        for f in self.folders:
+            f.clips = [c for c in f.clips if c.path != path]
+        self.folders = [f for f in self.folders if f.clips]
+        self._compute_new()
+        self._refresh_home()
+
+    def _undo_trash(self):
+        if not self._stashed:
+            return
+        aside, original = self._stashed.pop()
+        try:
+            back = trash.restore(aside, original)
+        except OSError:
+            self.toast(t("trash_fail"))
+            return
+        self.toast(t("trash_back"))
+        self._sig = None
+        self.rescan()
+        if self.stack.currentWidget() is self.editor and back:
+            self.open_paths([back])
+
+    def _flush_trash(self):
+        items, self._stashed = self._stashed, []
+        for aside, original in items:
+            self.loader.submit("flush:" + aside, trash.flush, aside, original)
 
     def set_folder_previews(self, on: bool):
         self.host.set("folder_previews", on)
@@ -185,9 +247,19 @@ class ClipsPage(QWidget):
             self._refresh_home()
         self.loader.submit("scan", library.scan, self.nv_dir)
 
+    def is_cut(self, path: str) -> bool:
+        """Made by this add-on, or named like a cut («…_wx», «…_trim», own suffix, «… - Trim»)."""
+        return path in self.made or library.looks_cut(path, (self.suffix(),))
+
+    def mark_made(self, paths: list[str]):
+        if paths:
+            self.made |= set(paths)
+            self.host.set("made", sorted(self.made)[-3000:])
+            self._compute_new()
+
     def _compute_new(self):
         done = self.done if self.mark else set()
-        self.new_list = library.new_clips(self.folders, since_ts(self.new_range, self.last_launch), done)
+        self.new_list = library.new_clips(self.folders, since_ts(self.new_range, self.last_launch), done, self.is_cut)
         self.new_set = {c.path for c in self.new_list}
 
     def _refresh_home(self):
@@ -453,6 +525,9 @@ class ClipsPage(QWidget):
 
     def shutdown(self):
         self._timer.stop()
+        for aside, original in self._stashed:     # no «Вернуть» after closing — straight to the Bin
+            trash.flush(aside, original)
+        self._stashed = []
         self.editor.shutdown()
         self.loader.shutdown()
 
@@ -497,6 +572,8 @@ class ClipsPage(QWidget):
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
+        if self.undo_bar.isVisible():
+            self.undo_bar._place()
         if self.overlay.isVisible():
             self.overlay.setGeometry(self.rect())
 

@@ -190,6 +190,53 @@ class ClipsUiSmoke(unittest.TestCase):
         spin(0.6)
         shot("8c_cleared")
 
+        # a cut from another time: green «КЛИП», sorted by when it was recorded, not «new»
+        import shutil
+        from wx_clips.core import library, trash
+        cut = str(nv / "Valorant" / "Valorant 2023.03.28 - 21.15.06.02.DVR - Trim.mp4")
+        shutil.copy(jre, cut)
+        own = str(nv / "Valorant" / "Valorant 2026.11.20 - 18.00.00.01.DVR.mp4")
+        shutil.copy(jre, own)
+        page._sig = None
+        page.rescan()
+        self.assertTrue(spin(10, lambda: any(c.path == cut for f in page.folders for c in f.clips)))
+        self.assertTrue(page.is_cut(cut))
+        self.assertFalse(page.is_cut(own))
+        self.assertNotIn(cut, page.new_set)
+        self.assertIn(own, page.new_set)
+        val = next(f for f in page.folders if f.name == "Valorant")
+        self.assertEqual(library.sort_clips(val.clips, "old")[0].path, cut)        # 2023 — the oldest
+        page.home.tabs.select("folders", emit=True)
+        page.home._open_folder(val)
+        page.home._in_sort("name")
+        spin(3, lambda: page._thumb.get(cut))
+        shot("10_folder_cut_by_name")
+
+        # delete from the card → «Вернуть» → back; delete again → after the countdown it's gone for good
+        self.assertTrue(page.trash_clip(own))
+        self.assertFalse(os.path.exists(own))
+        self.assertTrue(page.undo_bar.isVisible())
+        self.assertFalse(any(c.path == own for f in page.folders for c in f.clips))
+        shot("11_trash_undo_bar")
+        page._undo_trash()
+        self.assertTrue(os.path.exists(own))
+        self.assertTrue(page.trash_clip(own))
+        page.undo_bar._expire()
+        self.assertTrue(spin(10, lambda: not os.path.exists(nv / "Valorant" / trash.STASH)), "stash not flushed")
+        self.assertFalse(os.path.exists(own))
+
+        # delete the clip open in the editor (the player holds the file → it must let go)
+        page.open_paths([cut])
+        self.assertTrue(spin(10, lambda: page.clips and page.clips[0].info), "cut did not open")
+        spin(1)
+        ed._trash_current()
+        self.assertFalse(os.path.exists(cut), "the open clip was not deleted")
+        self.assertEqual(page.clips, [])
+        spin(1)
+        page._undo_trash()
+        self.assertTrue(os.path.exists(cut))
+        spin(1)
+
         tab = addon.settings(host)
         tab.resize(640, 640)
         tab.setStyleSheet(tab.styleSheet() + "#clipsSettings{background:#111113}")

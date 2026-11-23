@@ -6,12 +6,12 @@ import tempfile
 from pathlib import Path
 
 from PySide6.QtCore import QEasingCurve, QEvent, QPointF, QRectF, QSize, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (QAbstractButton, QFileDialog, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLineEdit,
                                QScrollArea,
                                QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 
-from ..core import encode
+from ..core import encode, library
 from ..core.encode import out_folder, plan_clip
 from ..core.i18n import clips_n, files_n, fmt_mb, segs_n, t
 from ..core.runner import ClipJob
@@ -120,7 +120,8 @@ class StripCard(QWidget):
                    p.fontMetrics().elidedText(game, Qt.TextElideMode.ElideRight, self.width() - 18))
         p.setPen(theme.c("faint"))
         p.setFont(font(7.4))
-        sub = f"{when(os.path.getmtime(c.path)) if os.path.exists(c.path) else ''} · {fmt_mb(os.path.getsize(c.path) / 1048576) if os.path.exists(c.path) else ''}"
+        rec = (library.recorded(c.path) or os.path.getmtime(c.path)) if os.path.exists(c.path) else 0
+        sub = f"{when(rec) if rec else ''} · {fmt_mb(os.path.getsize(c.path) / 1048576) if os.path.exists(c.path) else ''}"
         p.drawText(QRectF(9, th.bottom() + 19, self.width() - 18, 14), Qt.AlignmentFlag.AlignVCenter,
                    p.fontMetrics().elidedText(sub, Qt.TextElideMode.ElideRight, self.width() - 18))
 
@@ -570,6 +571,12 @@ class EditorView(QWidget):
         self.b_clear = button(t("clear"), "ghost")
         self.b_clear.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.b_clear.clicked.connect(self._clear)
+        self.b_trash = button(t("trash_btn"), "ghost")
+        self.b_trash.setIcon(QIcon(icon_pixmap("trash", theme.c("muted"), 15, self.devicePixelRatioF())))
+        self.b_trash.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.b_trash.setToolTip(t("trash_tip"))
+        self.b_trash.clicked.connect(self._trash_current)
+        head.addWidget(self.b_trash, 0, Qt.AlignmentFlag.AlignBottom)
         head.addWidget(self.b_gallery, 0, Qt.AlignmentFlag.AlignBottom)
         head.addWidget(self.b_clear, 0, Qt.AlignmentFlag.AlignBottom)
         lv.addLayout(head)
@@ -914,6 +921,25 @@ class EditorView(QWidget):
         self.render_strip()
         if not self.ctx.clips:
             self.player.pause()
+            self.timeline.set_clip(None)
+            self.view.clear()
+            self.go_home.emit()
+            return
+        self.load_current(strip=False)
+
+    def _trash_current(self):
+        c = self.clip
+        if c is None or self.running:
+            return
+        self.ctx.trash_clip(c.path)
+
+    def drop_clip(self, i: int):
+        """The clip left the disk (sent to the Bin): out of the session, show the next one."""
+        self.player.pause()
+        self.player.stop_ranges()
+        self.ctx.remove_clip(i)
+        self.render_strip()
+        if not self.ctx.clips:
             self.timeline.set_clip(None)
             self.view.clear()
             self.go_home.emit()
@@ -1544,6 +1570,7 @@ class EditorView(QWidget):
         else:
             done = [c.path for c in self.ctx.clips if c.status == "done"]
             self.ctx.mark_done(done)
+            self.ctx.mark_made(list(self._done_out))
             if self.ctx.del_orig and done:
                 self.player.release()            # Windows won't move a file that is open in the player
                 n = self.ctx.trash_originals(done)

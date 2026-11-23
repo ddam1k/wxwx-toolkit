@@ -6,6 +6,7 @@ from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
 from ..core.i18n import clips_n, fmt_mb, pl, t
+from ..core import library
 from ..core.library import ClipFile, GameFolder
 from .common import SmoothScroll, TabRow, badge, button, draw_cover, fade_change, label, pixmap, rounded, short, text_w, when
 from .theme import HAIR_BLACK, HAIR_WHITE, font, theme
@@ -52,15 +53,25 @@ class ClipCard(QWidget):
         self.update()
 
     def mouseMoveEvent(self, e):
+        self._mouse = e.position()
         x = e.position().x()
         self._scrub = max(0.0, min(0.999, x / self.width())) if e.position().y() < THUMB_H + 4 else -1
         self.update()
 
+    def _trash_rect(self) -> QRectF:
+        return QRectF(8, THUMB_H - 30, 26, 26)
+
     def mouseReleaseEvent(self, e):
-        if e.button() == Qt.MouseButton.LeftButton and self.rect().contains(e.position().toPoint()):
-            self.clicked.emit(self.clip.path)
+        if e.button() != Qt.MouseButton.LeftButton or not self.rect().contains(e.position().toPoint()):
+            return
+        if self._h > 0.5 and self._trash_rect().contains(e.position()):
+            self.ctx.trash_clip(self.clip.path)
+            return
+        self.clicked.emit(self.clip.path)
 
     def mouseDoubleClickEvent(self, e):
+        if self._trash_rect().contains(e.position()):
+            return
         self.double.emit(self.clip.path)
 
     def paintEvent(self, _):
@@ -90,6 +101,7 @@ class ClipCard(QWidget):
             p.fillRect(QRectF(th.left(), th.bottom() - 3, th.width() * self._scrub, 3), theme.c("tint"))
         # tag
         tag = (t("tag_done"), QColor("#6fcf97")) if done else (t("tag_open"), QColor(241, 239, 234, 235)) if is_open \
+            else (t("tag_cut"), QColor("#6fcf97")) if self.ctx.is_cut(c.path) \
             else (t("tag_new"), theme.c("tint")) if c.path in self.ctx.new_set else None
         if tag:
             f = font(7, QFont.Weight.ExtraBold)
@@ -114,9 +126,19 @@ class ClipCard(QWidget):
             if picked:
                 p.drawPixmap(QPointF(cc.x() - 7, cc.y() - 7), icon_pixmap("check", theme.c("on_ink"), 14, self.devicePixelRatioF()))
             p.setOpacity(self._in)
+        # to the Bin (on hover)
+        if self._h > 0.01 and not is_open:
+            p.setOpacity(self._in * self._h)
+            tr = self._trash_rect()
+            hot = tr.contains(getattr(self, "_mouse", QPointF(-1, -1)))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(200, 70, 60, 225) if hot else QColor(0, 0, 0, 160))
+            p.drawRoundedRect(tr, 8, 8)
+            p.drawPixmap(QPointF(tr.left() + 5, tr.top() + 5), icon_pixmap("trash", QColor("#fff"), 16, self.devicePixelRatioF()))
+            p.setOpacity(self._in)
         # texts
-        title = when(c.mtime) if self.in_folder else c.game
-        sub = (short(info.duration) if info else "…") if self.in_folder else when(c.mtime)
+        title = when(c.rec) if self.in_folder else c.game
+        sub = (short(info.duration) if info else "…") if self.in_folder else when(c.rec)
         sub = f"{sub} · {fmt_mb(c.size / 1048576)}"
         if self.in_folder and not c.folder:
             sub = c.name
@@ -593,8 +615,9 @@ class HomeView(QWidget):
         crumb.addStretch()
         col.addLayout(crumb)
         col.addSpacing(12)
-        seg = Segmented([("new", t("sort_new"), ""), ("old", t("sort_old"), ""), ("big", t("sort_big"), "")])
-        seg.setFixedWidth(400)
+        seg = Segmented([("new", t("sort_new"), ""), ("old", t("sort_old"), ""), ("big", t("sort_big"), ""),
+                         ("name", t("sort_name"), "")])
+        seg.setFixedWidth(520)
         seg.set_value(self.in_sort, animated=False)
         seg.changed.connect(self._in_sort)
         sel = button("", "ghost")
@@ -602,8 +625,7 @@ class HomeView(QWidget):
         sel.clicked.connect(lambda: self._pick_all(f.clips))
         self.sel_btn = sel
         self._section(col, seg, sel)
-        clips = sorted(f.clips, key=(lambda c: c.size) if self.in_sort == "big" else (lambda c: c.mtime),
-                       reverse=self.in_sort != "old")
+        clips = library.sort_clips(f.clips, self.in_sort)
         if not clips:
             col.addWidget(label(t("folder_empty"), "empty"))
         self._grid(col, clips, True)
