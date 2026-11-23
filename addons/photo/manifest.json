@@ -1,0 +1,14 @@
+{
+  "id": "photo",
+  "name": {"ru": "Фото", "en": "Photo"},
+  "version": "1.0.0",
+  "description": {
+    "ru": "Сжатие и конвертация картинок: JPG, WebP, AVIF, PNG, уменьшение, без данных о камере и месте",
+    "en": "Compress and convert pictures: JPG, WebP, AVIF, PNG, downsizing, without camera and location data"
+  },
+  "entry": "wx_photo.addon:create",
+  "settings": "wx_photo.addon:settings",
+  "icon": "photo",
+  "needs": ["ffmpeg"],
+  "min_toolkit": "1.3.1"
+}
