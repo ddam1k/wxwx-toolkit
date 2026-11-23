@@ -43,13 +43,14 @@ class Item:
     err: str = ""
 
 
-def rounded_pixmap(p: QPainter, r: QRectF, pm: QPixmap | None, radius: float):
+def rounded_pixmap(p: QPainter, r: QRectF, pm: QPixmap | None, radius: float, keep_bg: bool = False):
     p.save()
     path = QPainterPath()
     path.addRoundedRect(r, radius, radius)
     p.setClipPath(path)
     if pm is None or pm.isNull():
-        p.fillRect(r, theme.c("panel2"))
+        if not keep_bg:
+            p.fillRect(r, theme.c("panel2"))
     else:
         k = max(r.width() / pm.width(), r.height() / pm.height())
         w, h = pm.width() * k, pm.height() * k
@@ -115,7 +116,18 @@ class PhotoRow(QWidget):
         p.setBrush(theme.c("panel"))
         p.drawRoundedRect(r, 14, 14)
         th = self._thumb_rect()
-        rounded_pixmap(p, th, it.thumb, 10)
+        if s.alpha:                                   # transparency shows as a checkerboard, like in editors
+            p.save()
+            clip = QPainterPath()
+            clip.addRoundedRect(th, 10, 10)
+            p.setClipPath(clip)
+            p.fillRect(th, QColor("#e9e7e2"))
+            for yy in range(0, 60, 10):
+                for xx in range(0, 60, 10):
+                    if (xx // 10 + yy // 10) % 2:
+                        p.fillRect(QRectF(th.left() + xx, th.top() + yy, 10, 10), QColor("#c9c6bf"))
+            p.restore()
+        rounded_pixmap(p, th, it.thumb, 10, keep_bg=s.alpha)
         if it.st == "done":
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(17, 17, 19, 150))

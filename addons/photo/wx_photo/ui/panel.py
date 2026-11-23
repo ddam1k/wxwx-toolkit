@@ -1,16 +1,36 @@
 """The right panel of Photo: preset, format, quality, size, privacy, where to save — and the footer."""
 from __future__ import annotations
 
-import html
-
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QSizePolicy, QVBoxLayout, QWidget
 
 from ..core import opts
 from ..core.i18n import files, fmt_size, t
 from ..core.opts import Opts
 from ..kit.common import SmoothScroll, label
 from .widgets import Chip, FlowLayout, IconBadge, ProgressButton, SectionHeader, Segmented, SplitSlider, SwitchRow
+
+
+class Elide(QLabel):
+    """One line that shortens itself in the middle («C:\\Users\\…\\out») instead of widening the panel."""
+
+    def __init__(self, name: str, parent=None):
+        super().__init__(parent)
+        self.setObjectName(name)
+        self._full = ""
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+
+    def set_full(self, text: str):
+        self._full = text
+        self.setToolTip(text)
+        self._fit()
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._fit()
+
+    def _fit(self):
+        super().setText(self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideMiddle, max(30, self.width())))
 
 
 class OptionsPanel(QWidget):
@@ -154,7 +174,7 @@ class OptionsPanel(QWidget):
         dl.addWidget(IconBadge("folder", 18, 16, plain=True, tint=True))
         dv = QVBoxLayout()
         dv.setSpacing(2)
-        self.dest_path = label("", "destPath", wrap=True)
+        self.dest_path = Elide("destPath")
         self.dest_sub = label("", "destSub")
         dv.addWidget(self.dest_path)
         dv.addWidget(self.dest_sub)
@@ -185,8 +205,9 @@ class OptionsPanel(QWidget):
         st = QHBoxLayout()
         st.setSpacing(7)
         st.addWidget(IconBadge("folder", 16, 15, plain=True, tint=True))
-        self.saveto = label("", "saveTo", wrap=True)
-        self.saveto.setTextFormat(Qt.TextFormat.RichText)
+        self.l_saveto = label("", "saveTo")
+        st.addWidget(self.l_saveto)
+        self.saveto = Elide("saveToPath")
         st.addWidget(self.saveto, 1)
         fv.addLayout(st)
         outer.addWidget(footer)
@@ -268,7 +289,7 @@ class OptionsPanel(QWidget):
         sfx = self.suffix()
         self.sw_tk.sub.setText(t("tk_s", s=sfx))
         folder = self.host.folder("output") if tk else t("beside")
-        self.dest_path.setText(folder)
+        self.dest_path.set_full(folder)
         ext = "jpg" if o.fmt == "orig" else o.fmt
         self.dest_sub.setText(t("example", n=f"IMG_4021{sfx}.{ext}"))
         self.dest.setEnabled(not tk)
@@ -287,8 +308,8 @@ class OptionsPanel(QWidget):
         if not self._busy:
             self.go_btn.setText(t("go_n", n=files(n_todo)) if n_todo else t("go"))
             self.go_btn.setEnabled(n_todo > 0)
-        folder = html.escape(self.host.folder("output") if self.use_tk() else t("beside"))
-        self.saveto.setText(f'{t("saveto")} <b>{folder}</b>')
+        self.l_saveto.setText(t("saveto"))
+        self.saveto.set_full(self.host.folder("output") if self.use_tk() else t("beside"))
 
     def set_busy(self, on: bool, frac: float = 0.0, text: str = ""):
         self._busy = on

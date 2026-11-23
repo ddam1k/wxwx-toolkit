@@ -50,7 +50,7 @@ class PhotoUiSmoke(unittest.TestCase):
         with open(photo, "wb") as f:
             f.write(bytes(raw))
         shot_png = mk("screenshot_2026-11-19.png", "testsrc2=s=2560x1440")
-        logo = mk("logo_wx.png", "color=c=black@0.0:s=1024x1024,format=rgba,drawbox=x=212:y=212:w=600:h=600:color=0xb8a8e2@1:t=fill",
+        logo = mk("logo_wx.png", "color=c=0xb8a8e2:s=600x600,format=rgba,pad=1024:1024:212:212:color=black@0",
                   "-pix_fmt", "rgba")
         pose = mk("pose_ref_03.webp", "gradients=s=1200x1600:c0=0xe9d3c4:c1=0x4a2f3d", "-c:v", "libwebp", "-quality", "90")
         avif_in = mk("render.avif", "testsrc2=s=1600x900", "-c:v", "libaom-av1", "-still-picture", "1", "-cpu-used", "8",
