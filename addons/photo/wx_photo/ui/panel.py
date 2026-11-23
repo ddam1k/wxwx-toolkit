@@ -180,6 +180,9 @@ class OptionsPanel(QWidget):
         dv.addWidget(self.dest_sub)
         dl.addLayout(dv, 1)
         lay.addWidget(self.dest)
+        for sw in (self.sw_strip, self.sw_tk):         # long captions wrap instead of widening the panel
+            sw.sub.setWordWrap(True)
+            sw.title.setWordWrap(True)
         self.form.addStretch(1)
 
         # footer

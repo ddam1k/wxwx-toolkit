@@ -66,6 +66,7 @@ class SettingsTab(QWidget):
         sw.title.setText(t("tk_t"))
         sfx = self.host.suffix() if hasattr(self.host, "suffix") else "_wx"
         sw.sub.setText(t("tk_s", s=sfx))
+        sw.sub.setWordWrap(True)
         sw.switch.set_now(bool(self.host.get("use_tk", True)))
         sw.toggled.connect(lambda on: self.host.set("use_tk", on))
         self.col.addWidget(sw)
