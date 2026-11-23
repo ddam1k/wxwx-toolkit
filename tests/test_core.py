@@ -203,7 +203,10 @@ class MiscTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get("GITHUB_ACTIONS"), "talks to GitHub")
     def test_ffmpeg_dated_releases_really_match(self):
         """The fallback is only worth something if BtbN's dated releases use the names we expect."""
-        rels = components.net.get_json(f"https://api.github.com/repos/{components.BTBN}/releases?per_page=10")
+        try:
+            rels = components.net.get_json(f"https://api.github.com/repos/{components.BTBN}/releases?per_page=10")
+        except (OSError, TimeoutError, ValueError) as e:     # GitHub slow / rate-limited: not our bug
+            self.skipTest(f"GitHub not reachable: {e}")
         dated = [r for r in rels if r.get("tag_name") != "latest" and not r.get("draft")]
         self.assertTrue(dated, "no dated releases")
         hit = components.pick_ffmpeg_asset(dated[0].get("assets", []))
